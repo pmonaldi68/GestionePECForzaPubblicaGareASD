@@ -1,0 +1,6 @@
+{
+  "name": "Gestione PEC Forza Pubblica - Gare ASD",
+  "description": "Applicativo per la generazione e gestione automatica delle richieste PEC di Forza Pubblica al Commissariato di Polizia per le gare casalinghe delle ASD sportive.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
