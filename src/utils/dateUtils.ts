@@ -157,3 +157,147 @@ export function formatItalianDateWithWeekday(date: Date): string {
   const ggmmaaaa = formatDateToGGMMMAAAA(date);
   return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${ggmmaaaa}`;
 }
+
+export interface MatchPriority {
+  isUpcoming: boolean;       // True if match date is within 3 days (<= 3 days) or overdue while not sent
+  daysDiff: number | null;   // Calendar days difference from today: 0 = oggi, 1 = domani, 2 = tra 2 giorni, 3 = tra 3 giorni
+  label: string;             // Detailed badge label: "OGGI", "DOMANI", "Tra 2 giorni", "Tra 3 giorni", "Data superata"
+  shortBadge: string;        // Compact badge label: "OGGI", "DOMANI", "2 gg", "3 gg"
+  urgency: 'critical' | 'high' | 'medium' | 'none';
+  colorClasses: {
+    badge: string;
+    icon: string;
+    border: string;
+    bgGlow: string;
+    text: string;
+  };
+}
+
+/**
+ * Calculates whether a match date is imminent (within the next 3 days)
+ * to provide visual priority indicators ensuring timely PEC dispatch.
+ */
+export function getMatchPriority(
+  matchDateStr: string | number | null | undefined,
+  status?: 'da_inviare' | 'inviata' | 'annullata'
+): MatchPriority {
+  const parsed = parseMatchDate(matchDateStr);
+  if (!parsed) {
+    return {
+      isUpcoming: false,
+      daysDiff: null,
+      label: '',
+      shortBadge: '',
+      urgency: 'none',
+      colorClasses: { badge: '', icon: '', border: '', bgGlow: '', text: '' },
+    };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const target = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  target.setHours(0, 0, 0, 0);
+
+  const diffMs = target.getTime() - today.getTime();
+  const daysDiff = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+  // Overdue: match date in the past (< 0 days)
+  const isOverdue = daysDiff < 0;
+
+  if (isOverdue) {
+    const absDays = Math.abs(daysDiff);
+    return {
+      isUpcoming: true,
+      daysDiff,
+      label: `DATA SUPERATA (${absDays} ${absDays === 1 ? 'giorno fa' : 'giorni fa'})`,
+      shortBadge: `${absDays} gg fa`,
+      urgency: 'critical',
+      colorClasses: {
+        badge: 'bg-red-100 text-red-900 border-red-300 font-bold shadow-2xs',
+        icon: 'text-red-600',
+        border: 'border-l-4 border-l-red-500',
+        bgGlow: 'bg-red-50/40',
+        text: 'text-red-700',
+      },
+    };
+  }
+
+  if (daysDiff === 0) {
+    return {
+      isUpcoming: true,
+      daysDiff: 0,
+      label: 'OGGI - GARA ENTRO 24 ORE',
+      shortBadge: 'GARA OGGI',
+      urgency: 'critical',
+      colorClasses: {
+        badge: 'bg-rose-100 text-rose-950 border-rose-400 font-bold animate-pulse ring-1 ring-rose-300 shadow-2xs',
+        icon: 'text-rose-600',
+        border: 'border-l-4 border-l-rose-500',
+        bgGlow: 'bg-rose-50/50',
+        text: 'text-rose-700',
+      },
+    };
+  }
+
+  if (daysDiff === 1) {
+    return {
+      isUpcoming: true,
+      daysDiff: 1,
+      label: 'DOMANI - INVIO PEC TEMPESTIVO',
+      shortBadge: 'GARA DOMANI',
+      urgency: 'critical',
+      colorClasses: {
+        badge: 'bg-amber-100 text-amber-950 border-amber-400 font-bold ring-1 ring-amber-300 shadow-2xs',
+        icon: 'text-amber-600',
+        border: 'border-l-4 border-l-amber-500',
+        bgGlow: 'bg-amber-50/40',
+        text: 'text-amber-800',
+      },
+    };
+  }
+
+  if (daysDiff === 2) {
+    return {
+      isUpcoming: true,
+      daysDiff: 2,
+      label: 'TRA 2 GIORNI - PRIORITÀ ALTA',
+      shortBadge: 'Tra 2 gg',
+      urgency: 'high',
+      colorClasses: {
+        badge: 'bg-orange-50 text-orange-950 border-orange-300 font-semibold shadow-2xs',
+        icon: 'text-orange-600',
+        border: 'border-l-4 border-l-orange-400',
+        bgGlow: 'bg-orange-50/30',
+        text: 'text-orange-800',
+      },
+    };
+  }
+
+  if (daysDiff === 3) {
+    return {
+      isUpcoming: true,
+      daysDiff: 3,
+      label: 'TRA 3 GIORNI - IN SCADENZA',
+      shortBadge: 'Tra 3 gg',
+      urgency: 'medium',
+      colorClasses: {
+        badge: 'bg-yellow-50 text-yellow-950 border-yellow-300 font-semibold shadow-2xs',
+        icon: 'text-yellow-600',
+        border: 'border-l-4 border-l-yellow-400',
+        bgGlow: 'bg-yellow-50/25',
+        text: 'text-yellow-800',
+      },
+    };
+  }
+
+  return {
+    isUpcoming: false,
+    daysDiff,
+    label: '',
+    shortBadge: '',
+    urgency: 'none',
+    colorClasses: { badge: '', icon: '', border: '', bgGlow: '', text: '' },
+  };
+}
+

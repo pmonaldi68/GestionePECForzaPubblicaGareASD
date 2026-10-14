@@ -14,6 +14,7 @@ import {
   UserCheck, 
   CheckCircle2, 
   AlertCircle, 
+  AlertTriangle,
   FileText, 
   CalendarCheck, 
   Edit2, 
@@ -25,6 +26,7 @@ import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
 import { generatePecForMatch, formatSeparatedFieldsTxt, downloadTextFile, createMailtoLink } from '../utils/pecGenerator';
 import { downloadMatchPecPdf } from '../utils/pdfGenerator';
 import { formatCurrentSendDate, generateProtocolloNumber } from '../utils/matchMerger';
+import { getMatchPriority } from '../utils/dateUtils';
 
 interface MatchItemProps {
   match: Match;
@@ -59,6 +61,7 @@ export const MatchItem: React.FC<MatchItemProps> = ({
 
   const club = CLUBS[match.clubId] || CLUBS.CYNTHIA_1920;
   const pec = generatePecForMatch(match, useDynamicAsdName);
+  const priority = getMatchPriority(match.data, match.status);
 
   const handleCopy = (text: string, fieldName: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -126,12 +129,14 @@ export const MatchItem: React.FC<MatchItemProps> = ({
 
   return (
     <div
-      className={`border rounded-xl transition-all duration-150 bg-white relative ${
+      className={`border rounded-xl transition-all duration-150 relative ${
         isSelected
-          ? 'border-blue-500 shadow-sm ring-1 ring-blue-500'
+          ? 'border-blue-500 shadow-sm ring-1 ring-blue-500 bg-white'
           : match.status === 'inviata'
           ? 'border-emerald-200/90 shadow-2xs bg-emerald-50/15'
-          : 'border-slate-200/90 hover:border-slate-300 shadow-xs'
+          : priority.isUpcoming
+          ? `border-amber-300 ${priority.colorClasses.border} ${priority.colorClasses.bgGlow} shadow-xs hover:border-amber-400`
+          : 'border-slate-200/90 hover:border-slate-300 shadow-xs bg-white'
       }`}
     >
       <div className="p-4 sm:p-5">
@@ -163,7 +168,22 @@ export const MatchItem: React.FC<MatchItemProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Visual Priority Badge: next to match if date is within 3 days */}
+            {priority.isUpcoming && (
+              <div
+                className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-md border ${priority.colorClasses.badge}`}
+                title={`Partita prossima (entro i prossimi 3 giorni): ${priority.label}. Inviare la richiesta PEC di Forza Pubblica tempestivamente ai sensi dell'Art. 62 N.O.I.F.`}
+              >
+                <AlertTriangle className={`w-3.5 h-3.5 ${priority.colorClasses.icon} shrink-0`} />
+                <span>
+                  {match.status === 'inviata'
+                    ? `Gara ${priority.shortBadge} (Inviata)`
+                    : priority.label}
+                </span>
+              </div>
+            )}
+
             {/* Home / Away Badge with click toggle */}
             <button
               onClick={e => {
@@ -371,7 +391,7 @@ export const MatchItem: React.FC<MatchItemProps> = ({
                         value={customProtocollo}
                         onChange={e => setCustomProtocollo(e.target.value)}
                         placeholder="AAAAMMGGHHMMSS"
-                        title="Numero protocollo (AAAAMMGGHHMMSS)"
+                        title="Numero protocollo"
                         className="bg-white border border-emerald-300 text-slate-800 px-1.5 py-0.5 rounded text-[11px] font-mono w-36 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                       />
                       <button
@@ -402,7 +422,7 @@ export const MatchItem: React.FC<MatchItemProps> = ({
 
           {/* Date, Time & Facility */}
           <div className="md:col-span-5 space-y-1.5 text-xs">
-            <div className="flex items-center gap-3 text-slate-700 font-medium">
+            <div className="flex flex-wrap items-center gap-2.5 text-slate-700 font-medium">
               <div className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
                 <span className="font-semibold text-slate-900">{match.data}</span>
@@ -411,6 +431,15 @@ export const MatchItem: React.FC<MatchItemProps> = ({
                 <Clock className="w-3.5 h-3.5 text-slate-400" />
                 <span className="font-semibold text-slate-900">{match.ora}</span>
               </div>
+              {priority.isUpcoming && match.status !== 'inviata' && (
+                <span
+                  className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${priority.colorClasses.badge}`}
+                  title="Partita entro 3 giorni: inviare PEC con massima priorità"
+                >
+                  <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                  <span>{priority.shortBadge}</span>
+                </span>
+              )}
             </div>
 
             <div className="flex items-start justify-between gap-2 text-slate-600 pt-0.5">

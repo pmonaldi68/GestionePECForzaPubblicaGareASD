@@ -11,11 +11,11 @@ import { SettingsModal } from './components/SettingsModal';
 import { CalendarView } from './components/CalendarView';
 import { GoogleSheetSyncBar } from './components/GoogleSheetSyncBar';
 import { FacilityChangeModal } from './components/FacilityChangeModal';
-import { Calendar, AlertCircle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Calendar, AlertCircle, AlertTriangle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2 } from 'lucide-react';
 import { downloadAllDraftsAsZip } from './utils/pecGenerator';
 import { downloadAllPdfsAsZip } from './utils/pdfGenerator';
 import { getGoogleSheetsCsvUrl, parseRawText, DEFAULT_COLUMN_MAPPING } from './utils/sheetParser';
-import { formatDateToGGMMMAAAA, parseMatchDate } from './utils/dateUtils';
+import { formatDateToGGMMMAAAA, parseMatchDate, getMatchPriority } from './utils/dateUtils';
 import { mergeMatchesPreservingSent, formatCurrentSendDate, generateProtocolloNumber, ensureUniqueMatchIds } from './utils/matchMerger';
 
 const STORAGE_KEY = 'asd_pec_matches_v1';
@@ -288,6 +288,13 @@ export default function App() {
     });
   }, [matches, selectedClub, onlyHomeMatches, statusFilter, selectedCategory, searchQuery, dateRange]);
 
+  // Urgent unsent home matches within the next 3 days (or overdue)
+  const urgentUnsentMatches = useMemo(() => {
+    return matches.filter(
+      m => m.isHome && m.status !== 'inviata' && getMatchPriority(m.data, m.status).isUpcoming
+    );
+  }, [matches]);
+
   // Toggle match status (da_inviare <-> inviata)
   // When setting to inviata: generates protocollo (AAAAMMGGHHMMSS) and sets pecSentDate
   const handleToggleStatus = (id: string) => {
@@ -489,6 +496,35 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Urgent Upcoming Matches Alert Banner (Within next 3 days) */}
+        {urgentUnsentMatches.length > 0 && statusFilter !== 'inviata' && (
+          <div className="mb-4 bg-rose-50 border border-rose-300 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-rose-950 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="p-1.5 bg-rose-100 rounded-lg text-rose-700">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+              </span>
+              <div>
+                <strong className="font-bold text-rose-900">
+                  Priorità Alta Invio PEC: {urgentUnsentMatches.length} {urgentUnsentMatches.length === 1 ? 'partita casalinga' : 'partite casalinghe'} in programma entro i prossimi 3 giorni!
+                </strong>
+                <p className="text-rose-800/90 mt-0.5">
+                  Ai sensi dell'Art. 62 N.O.I.F., richiedi tempestivamente l'intervento della Forza Pubblica per garantire la regolarità delle gare.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setSelectedMatchIds(urgentUnsentMatches.map(m => m.id));
+                }}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-semibold px-3 py-1.5 rounded-lg shadow-2xs transition-colors cursor-pointer text-xs"
+              >
+                Seleziona {urgentUnsentMatches.length} Gare Imminenti
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Startup Mode Notice (PEC Inviate Nascoste di Default) */}
         {statusFilter === 'da_inviare' && totalSentCount > 0 && (
           <div className="mb-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-emerald-950">

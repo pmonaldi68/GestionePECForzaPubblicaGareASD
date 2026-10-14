@@ -7,6 +7,7 @@ import {
   Mail, 
   CheckCircle2, 
   AlertCircle, 
+  AlertTriangle,
   Building2, 
   UserCheck, 
   Phone, 
@@ -22,6 +23,7 @@ import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
 import { generatePecForMatch, formatSeparatedFieldsTxt, downloadTextFile, createMailtoLink } from '../utils/pecGenerator';
 import { downloadMatchPecPdf } from '../utils/pdfGenerator';
 import { formatCurrentSendDate, generateProtocolloNumber } from '../utils/matchMerger';
+import { getMatchPriority } from '../utils/dateUtils';
 
 interface PecPreviewModalProps {
   match: Match | null;
@@ -109,6 +111,8 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
     pec.testoCompleto
   );
 
+  const priority = getMatchPriority(match.data, match.status);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-3xl w-full my-8 shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
@@ -130,6 +134,17 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Priority Indicator */}
+            {priority.isUpcoming && (
+              <div
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-lg border ${priority.colorClasses.badge}`}
+                title={`Partita programmata ${priority.daysDiff === 0 ? 'OGGI' : priority.daysDiff === 1 ? 'DOMANI' : `tra ${priority.daysDiff} giorni`}: inviare PEC tempestivamente.`}
+              >
+                <AlertTriangle className={`w-3.5 h-3.5 ${priority.colorClasses.icon} shrink-0`} />
+                <span>{match.status === 'inviata' ? `Gara ${priority.shortBadge}` : priority.label}</span>
+              </div>
+            )}
+
             <button
               onClick={() => onToggleStatus(match.id)}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
@@ -241,7 +256,7 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
                       value={customProtocollo}
                       onChange={e => setCustomProtocollo(e.target.value)}
                       placeholder="Prot: AAAAMMGGHHMMSS"
-                      title="Numero protocollo (AAAAMMGGHHMMSS)"
+                      title="Numero protocollo"
                       className="bg-white border border-slate-300 text-slate-800 px-2 py-0.5 rounded text-xs font-mono w-36"
                     />
                     <button
