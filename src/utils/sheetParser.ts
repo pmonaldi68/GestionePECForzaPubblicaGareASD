@@ -4,6 +4,7 @@ import { Match, ClubId, ColumnMapping } from '../types';
 import { CLUBS, CATEGORY_FACILITY_RULES } from '../config/clubsData';
 import { resolveFacilityText } from './pecGenerator';
 import { normalizeToGGMMMAAAA } from './dateUtils';
+import { ensureUniqueMatchIds } from './matchMerger';
 
 export const DEFAULT_COLUMN_MAPPING: ColumnMapping = {
   campionatoCol: 2, // Colonna C (0-indexed: 2)
@@ -259,7 +260,7 @@ export function parseGridToMatches(grid: string[][], mapping: ColumnMapping = DE
     });
   }
 
-  return matches;
+  return ensureUniqueMatchIds(matches);
 }
 
 /**
@@ -326,4 +327,52 @@ export function getGoogleSheetsCsvUrl(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Computes a normalized key for a match to identify the same match across reloads
+ */
+export function getMatchKey(m: { squadraCasa: string; squadraOspite: string; data: string }): string {
+  const norm = (s: string) => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const dataNorm = normalizeToGGMMMAAAA(m.data);
+  return `${norm(m.squadraCasa)}_${norm(m.squadraOspite)}_${dataNorm}`;
+}
+
+/**
+ * Merges newly imported matches with existing ones, strictly preserving:
+ * - status: 'inviata'
+ * - pecSentDate (data di invio effettiva)
+ * - facility variations (variazione campo di gioco)
+ * - custom notes
+ */
+export function mergeMatchesPreservingStatus(existingMatches: Match[], incomingMatches: Match[]): Match[] {
+  if (!existingMatches || existingMatches.length === 0) return incomingMatches;
+
+  const existingMap = new Map<string, Match>();
+  existingMatches.forEach(m => {
+    existingMap.set(getMatchKey(m), m);
+  });
+
+  const merged = incomingMatches.map(incoming => {
+    const key = getMatchKey(incoming);
+    const existing = existingMap.get(key);
+
+    if (existing) {
+      return {
+        ...incoming,
+        id: existing.id,
+        // PRESERVE SENT STATUS & SENT DATE
+        status: existing.status,
+        pecSentDate: existing.pecSentDate,
+        // PRESERVE FACILITY OVERRIDE
+        facilityText: existing.facilityText || incoming.facilityText,
+        isHome: existing.isHome !== undefined ? existing.isHome : incoming.isHome,
+        notes: existing.notes || incoming.notes,
+      };
+    }
+
+    return incoming;
+  });
+
+  return merged;
 }

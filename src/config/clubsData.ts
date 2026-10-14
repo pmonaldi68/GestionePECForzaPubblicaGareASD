@@ -163,7 +163,7 @@ export const CATEGORY_FACILITY_RULES: CategoryFacilityRule[] = [
 
 export const COMMISSARIATO_INFO = {
   name: 'Commissariato di P.S. Genzano di Roma',
-  pec: 'dipps175.00i0@pecps.poliziadistato.it',
+  pec: 'dipps172.5600@pecps.poliziadistato.it',
   address: 'Via Italo Belardi 81, 00045 Genzano di Roma (RM)',
   telephone: '06 937121',
 };

@@ -1,8 +1,27 @@
 import React, { useState } from 'react';
-import { X, Copy, Check, Download, Mail, CheckCircle2, AlertCircle, Building2, UserCheck, Phone, FileText, MapPin } from 'lucide-react';
+import { 
+  X, 
+  Copy, 
+  Check, 
+  Download, 
+  Mail, 
+  CheckCircle2, 
+  AlertCircle, 
+  Building2, 
+  UserCheck, 
+  Phone, 
+  FileText, 
+  MapPin, 
+  CalendarCheck, 
+  FileCheck2, 
+  Edit3, 
+  Clock 
+} from 'lucide-react';
 import { Match } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
 import { generatePecForMatch, formatSeparatedFieldsTxt, downloadTextFile, createMailtoLink } from '../utils/pecGenerator';
+import { downloadMatchPecPdf } from '../utils/pdfGenerator';
+import { formatCurrentSendDate } from '../utils/matchMerger';
 
 interface PecPreviewModalProps {
   match: Match | null;
@@ -10,6 +29,7 @@ interface PecPreviewModalProps {
   onToggleStatus: (matchId: string) => void;
   useDynamicAsdName: boolean;
   onChangeFacility?: () => void;
+  onUpdateSentDate?: (matchId: string, newDate: string) => void;
 }
 
 export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
@@ -18,8 +38,11 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
   onToggleStatus,
   useDynamicAsdName,
   onChangeFacility,
+  onUpdateSentDate,
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [isEditingDate, setIsEditingDate] = useState<boolean>(false);
+  const [customDate, setCustomDate] = useState<string>('');
 
   if (!match) return null;
 
@@ -41,6 +64,36 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
     downloadTextFile(filename, content);
   };
 
+  const handleDownloadPdf = () => {
+    // If not yet sent, set current timestamp
+    if (match.status !== 'inviata') {
+      const now = formatCurrentSendDate();
+      if (onUpdateSentDate) {
+        onUpdateSentDate(match.id, now);
+      }
+      downloadMatchPecPdf({ ...match, status: 'inviata', pecSentDate: now }, useDynamicAsdName);
+    } else {
+      downloadMatchPecPdf(match, useDynamicAsdName);
+    }
+  };
+
+  const handleSaveCustomDate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onUpdateSentDate && customDate.trim()) {
+      onUpdateSentDate(match.id, customDate.trim());
+    }
+    setIsEditingDate(false);
+  };
+
+  const handleSetDateToNow = () => {
+    const now = formatCurrentSendDate();
+    setCustomDate(now);
+    if (onUpdateSentDate) {
+      onUpdateSentDate(match.id, now);
+    }
+    setIsEditingDate(false);
+  };
+
   const mailtoLink = createMailtoLink(
     COMMISSARIATO_INFO.pec,
     pec.oggetto,
@@ -49,7 +102,7 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-3xl w-full my-8 shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-2xl max-w-3xl w-full my-8 shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
           <div>
@@ -70,15 +123,15 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => onToggleStatus(match.id)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
                 match.status === 'inviata'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                  : 'bg-rose-50 text-rose-800 border-rose-300'
+                  ? 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200'
+                  : 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
               }`}
             >
               {match.status === 'inviata' ? (
                 <>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
                   <span>Stato: Inviata</span>
                 </>
               ) : (
@@ -91,7 +144,7 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
 
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg transition-colors"
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -99,25 +152,90 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
         </div>
 
         {/* Modal Scrollable Content: Separated Fields */}
-        <div className="p-6 overflow-y-auto space-y-5 text-sm">
-          {/* Destinatario Info */}
-          <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/80 flex items-center justify-between">
+        <div className="p-6 overflow-y-auto space-y-4 text-sm">
+          {/* Destinatario Info & Legal Certification Banner */}
+          <div className="bg-emerald-50/70 rounded-xl p-4 border border-emerald-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Destinatario Istituzionale (Commissariato di P.S.)
-              </span>
-              <span className="text-xs font-mono font-medium text-slate-800">
-                {COMMISSARIATO_INFO.pec}
-              </span>
-              <span className="text-xs text-slate-500 ml-2">({COMMISSARIATO_INFO.name})</span>
+              <div className="flex items-center gap-2">
+                <CalendarCheck className="w-4 h-4 text-emerald-700" />
+                <span className="text-xs font-bold text-emerald-900 uppercase tracking-wide">
+                  Destinatario Ufficiale & Certificazione PEC
+                </span>
+              </div>
+              <p className="text-xs text-emerald-950 mt-1">
+                La presente comunicazione è da inoltrare (o risulta inviata) alla PEC istituzionale:
+              </p>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="font-mono font-bold text-xs text-blue-800 bg-white px-2 py-0.5 rounded border border-blue-200">
+                  {COMMISSARIATO_INFO.pec}
+                </span>
+                <span className="text-xs text-emerald-800">
+                  ({COMMISSARIATO_INFO.name})
+                </span>
+              </div>
+
+              {/* Saved Send Date Info */}
+              <div className="mt-2 text-xs flex flex-wrap items-center gap-1.5">
+                <span className="font-semibold text-slate-700">Data e Ora Invio Registrata:</span>
+                <span className="font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                  {match.pecSentDate || (match.status === 'inviata' ? 'Data odierna' : 'Non ancora inviata')}
+                </span>
+
+                {!isEditingDate ? (
+                  <button
+                    onClick={() => {
+                      setCustomDate(match.pecSentDate || formatCurrentSendDate());
+                      setIsEditingDate(true);
+                    }}
+                    className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 underline ml-1 inline-flex items-center gap-0.5"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Modifica data invio</span>
+                  </button>
+                ) : (
+                  <form onSubmit={handleSaveCustomDate} className="inline-flex items-center gap-1 ml-1">
+                    <input
+                      type="text"
+                      value={customDate}
+                      onChange={e => setCustomDate(e.target.value)}
+                      placeholder="GG/MM/AAAA alle OO:MM"
+                      className="bg-white border border-slate-300 text-slate-800 px-2 py-0.5 rounded text-xs font-mono"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-emerald-600 text-white px-2 py-0.5 rounded text-xs font-semibold hover:bg-emerald-700"
+                    >
+                      Salva
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSetDateToNow}
+                      className="bg-slate-200 text-slate-800 px-2 py-0.5 rounded text-xs font-semibold hover:bg-slate-300"
+                    >
+                      Ora
+                    </button>
+                  </form>
+                )}
+              </div>
             </div>
-            <button
-              onClick={() => handleCopy(COMMISSARIATO_INFO.pec, 'dest')}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded text-slate-600 hover:bg-slate-200 transition-colors"
-            >
-              {copiedKey === 'dest' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedKey === 'dest' ? 'Copiato' : 'Copia PEC'}</span>
-            </button>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2 shrink-0">
+              <button
+                onClick={() => handleCopy(COMMISSARIATO_INFO.pec, 'dest')}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100 transition-colors"
+              >
+                {copiedKey === 'dest' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedKey === 'dest' ? 'Copiato' : 'Copia PEC Destinatario'}</span>
+              </button>
+
+              <button
+                onClick={handleDownloadPdf}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-red-600 text-white hover:bg-red-700 shadow-xs transition-colors"
+              >
+                <FileCheck2 className="w-3.5 h-3.5" />
+                <span>Scarica Ricevuta PDF</span>
+              </button>
+            </div>
           </div>
 
           {/* 1. OGGETTO MAIL */}
@@ -153,16 +271,16 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
                 <span>{copiedKey === 'intestazione' ? 'Copiato' : 'Copia'}</span>
               </button>
             </div>
-            <div className="p-4 text-xs text-slate-800 leading-relaxed whitespace-pre-wrap">
+            <div className="p-4 font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
               {pec.intestazione}
             </div>
           </div>
 
-          {/* 3. CORPO MAIL */}
+          {/* 3. CORPO MAIL (Dettagli Gara) */}
           <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
             <div className="bg-slate-100/70 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                3. Corpo Mail (Dati Gara)
+                3. Corpo Mail (Dettagli Gara)
               </span>
               <button
                 onClick={() => handleCopy(pec.corpo, 'corpo')}
@@ -172,7 +290,7 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
                 <span>{copiedKey === 'corpo' ? 'Copiato' : 'Copia'}</span>
               </button>
             </div>
-            <div className="p-4 font-mono text-xs text-slate-800 whitespace-pre-wrap leading-loose">
+            <div className="p-4 font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed bg-slate-50">
               {pec.corpo}
             </div>
           </div>
@@ -180,42 +298,37 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
           {/* 4. IMPIANTO SPORTIVO */}
           <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
             <div className="bg-slate-100/70 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-slate-500" />
-                <span>4. Impianto Sportivo (Specifico per Categoria)</span>
-              </span>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  4. Dettagli Impianto Sportivo
+                </span>
                 {onChangeFacility && (
                   <button
-                    type="button"
                     onClick={onChangeFacility}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 transition-colors shadow-2xs"
-                    title="Varia velocemente l'impianto sportivo"
+                    className="text-[10px] font-semibold text-amber-800 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200 transition-colors"
                   >
-                    <MapPin className="w-3 h-3 text-amber-700" />
-                    <span>Varia Campo</span>
+                    Varia Campo
                   </button>
                 )}
-                <button
-                  onClick={() => handleCopy(pec.impianto, 'impianto')}
-                  className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
-                >
-                  {copiedKey === 'impianto' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedKey === 'impianto' ? 'Copiato' : 'Copia'}</span>
-                </button>
               </div>
+              <button
+                onClick={() => handleCopy(pec.impianto, 'impianto')}
+                className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                {copiedKey === 'impianto' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedKey === 'impianto' ? 'Copiato' : 'Copia'}</span>
+              </button>
             </div>
-            <div className="p-4 text-xs font-semibold text-slate-800 leading-relaxed bg-amber-50/30">
+            <div className="p-4 font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed">
               {pec.impianto}
             </div>
           </div>
 
-          {/* 5. CONTATTO REFERENTE */}
+          {/* 5. CONTATTI REFERENTE */}
           <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
             <div className="bg-slate-100/70 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-slate-500" />
-                <span>5. Contatto Referente (Specifico per Società)</span>
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                5. Contatti per Informazioni
               </span>
               <button
                 onClick={() => handleCopy(pec.contatto, 'contatto')}
@@ -225,17 +338,16 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
                 <span>{copiedKey === 'contatto' ? 'Copiato' : 'Copia'}</span>
               </button>
             </div>
-            <div className="p-4 text-xs font-semibold text-slate-800 leading-relaxed">
+            <div className="p-4 font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed bg-slate-50">
               {pec.contatto}
             </div>
           </div>
 
-          {/* 6. CHIUSURA E FIRMA */}
+          {/* 6. CHIUSURA E FIRMA PRESIDENTE */}
           <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
             <div className="bg-slate-100/70 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-                <UserCheck className="w-3.5 h-3.5 text-slate-500" />
-                <span>6. Chiusura e Firma Presidente (Specifico per Società)</span>
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                6. Saluti Finali e Firma del Presidente
               </span>
               <button
                 onClick={() => handleCopy(pec.chiusuraFirma, 'firma')}
@@ -273,13 +385,23 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
 
         {/* Modal Bottom Actions Footer */}
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <button
-            onClick={handleDownloadTxt}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 shadow-xs transition-colors"
-          >
-            <Download className="w-4 h-4 text-slate-600" />
-            <span>Salva File di Testo (.TXT con Campi Separati)</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleDownloadPdf}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg bg-red-600 text-white hover:bg-red-700 shadow-xs transition-colors"
+            >
+              <FileCheck2 className="w-4 h-4" />
+              <span>Scarica PDF Attestazione</span>
+            </button>
+
+            <button
+              onClick={handleDownloadTxt}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 shadow-xs transition-colors"
+            >
+              <Download className="w-4 h-4 text-slate-600" />
+              <span>Salva File .TXT</span>
+            </button>
+          </div>
 
           <div className="flex items-center gap-2">
             <a

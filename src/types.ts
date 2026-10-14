@@ -65,3 +65,11 @@ export interface ColumnMapping {
   societaCol?: number;    // Optional col A or B
   categoriaCol?: number;  // Optional col A or B
 }
+
+export type DateRangePreset = 'ALL' | 'CURRENT_MONTH' | 'NEXT_MONTH' | 'THIS_WEEKEND' | 'CUSTOM';
+
+export interface DateRangeFilter {
+  preset: DateRangePreset;
+  startDate?: string; // YYYY-MM-DD
+  endDate?: string;   // YYYY-MM-DD
+}

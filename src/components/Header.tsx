@@ -9,6 +9,7 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onLoadSampleData: () => void;
   onDownloadAllZip: () => void;
+  onDownloadAllPdfsZip?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,6 +19,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onLoadSampleData,
   onDownloadAllZip,
+  onDownloadAllPdfsZip,
 }) => {
   const homeMatches = matches.filter(m => m.isHome);
   const sentMatches = homeMatches.filter(m => m.status === 'inviata');
@@ -42,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Richiesta servizio d’ordine al Commissariato di Polizia di Stato di Genzano di Roma · Art. 62 commi 4-5 N.O.I.F.
+                Richiesta servizio d'ordine al Commissariato di Polizia di Stato di Genzano di Roma - Art. 62 commi 4-5 N.O.I.F.
               </p>
             </div>
           </div>
@@ -51,16 +53,32 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={onOpenImport}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm transition-colors cursor-pointer"
             >
               <Upload className="w-4 h-4" />
-              <span>Importa Foglio Gare</span>
+              <span>Importa Foglio</span>
             </button>
+
+            {onDownloadAllPdfsZip && (
+              <button
+                onClick={onDownloadAllPdfsZip}
+                disabled={homeMatches.length === 0}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg shadow-sm transition-colors cursor-pointer ${
+                  homeMatches.length > 0
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                }`}
+                title="Scarica tutte le attestazioni ufficiali PDF per le gare in casa con ricevuta PEC"
+              >
+                <Download className="w-4 h-4" />
+                <span>Scarica PDF ({homeMatches.length})</span>
+              </button>
+            )}
 
             <button
               onClick={onDownloadAllZip}
               disabled={homeMatches.length === 0}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg shadow-sm transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg shadow-sm transition-colors cursor-pointer ${
                 homeMatches.length > 0
                   ? 'bg-amber-600 text-white hover:bg-amber-700'
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed'
@@ -68,20 +86,20 @@ export const Header: React.FC<HeaderProps> = ({
               title="Scarica un archivio ZIP con tutte le bozze in singoli file di testo (.txt) a campi separati"
             >
               <Download className="w-4 h-4" />
-              <span>Scarica Tutte le Bozze ({homeMatches.length} .TXT)</span>
+              <span>Bozze .TXT</span>
             </button>
 
             <button
               onClick={onOpenBatchExport}
               disabled={homeMatches.length === 0}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
                 homeMatches.length > 0
                   ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50 shadow-sm'
                   : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
               }`}
             >
               <FileText className="w-4 h-4 text-slate-500" />
-              <span>Opzioni Export</span>
+              <span>Tutti i Formati (PDF / CSV)</span>
             </button>
 
             <button

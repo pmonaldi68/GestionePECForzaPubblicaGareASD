@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Match, ClubId } from './types';
+import { Match, ClubId, DateRangeFilter } from './types';
 import { SAMPLE_MATCHES } from './data/sampleMatches';
 import { Header } from './components/Header';
 import { FiltersBar } from './components/FiltersBar';
@@ -11,10 +11,12 @@ import { SettingsModal } from './components/SettingsModal';
 import { CalendarView } from './components/CalendarView';
 import { GoogleSheetSyncBar } from './components/GoogleSheetSyncBar';
 import { FacilityChangeModal } from './components/FacilityChangeModal';
-import { Calendar, AlertCircle, Home, CheckSquare, Plus, FileSpreadsheet } from 'lucide-react';
+import { Calendar, AlertCircle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2 } from 'lucide-react';
 import { downloadAllDraftsAsZip } from './utils/pecGenerator';
+import { downloadAllPdfsAsZip } from './utils/pdfGenerator';
 import { getGoogleSheetsCsvUrl, parseRawText, DEFAULT_COLUMN_MAPPING } from './utils/sheetParser';
-import { formatDateToGGMMMAAAA } from './utils/dateUtils';
+import { formatDateToGGMMMAAAA, parseMatchDate } from './utils/dateUtils';
+import { mergeMatchesPreservingSent, formatCurrentSendDate, ensureUniqueMatchIds } from './utils/matchMerger';
 
 const STORAGE_KEY = 'asd_pec_matches_v1';
 const DYNAMIC_ASD_KEY = 'asd_pec_dynamic_name_v1';
@@ -22,18 +24,20 @@ const STORAGE_SHEET_URL_KEY = 'asd_pec_google_sheet_url_v1';
 const STORAGE_LAST_SYNC_KEY = 'asd_pec_last_sync_v1';
 
 export default function App() {
-  // Load saved matches or fallback to samples
+  // Load saved matches or fallback to samples, guaranteeing strictly unique IDs
   const [matches, setMatches] = useState<Match[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return ensureUniqueMatchIds(parsed);
+        }
       }
     } catch {
       // Ignore
     }
-    return SAMPLE_MATCHES;
+    return ensureUniqueMatchIds(SAMPLE_MATCHES);
   });
 
   const [useDynamicAsdName, setUseDynamicAsdName] = useState<boolean>(() => {
@@ -75,7 +79,12 @@ export default function App() {
   const [onlyHomeMatches, setOnlyHomeMatches] = useState<boolean>(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'da_inviare' | 'inviata'>('ALL');
+
+  // USER REQUIREMENT: "all'apertura dell'app devono essere visulaizzate solo le pec da inviare quelle inviate restano nascoste"
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'da_inviare' | 'inviata'>('da_inviare');
+
+  // USER REQUIREMENT: Date Range picker
+  const [dateRange, setDateRange] = useState<DateRangeFilter>({ preset: 'ALL' });
 
   // Selection & Modals State
   const [selectedMatchIds, setSelectedMatchIds] = useState<string[]>([]);
@@ -85,7 +94,7 @@ export default function App() {
   const [isBatchExportOpen, setIsBatchExportOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
-  // Auto-sync function: updates matches from Google Sheet link
+  // Auto-sync function: updates matches from Google Sheet link preserving sent status and dates
   const fetchAndSyncFromSheet = async (url: string) => {
     if (!url || !url.trim()) return;
     setIsSyncing(true);
@@ -119,7 +128,10 @@ export default function App() {
         throw new Error('Nessuna gara valida trovata nel foglio.');
       }
 
-      setMatches(parsedMatches);
+      // USER REQUIREMENT: "quando si aggiornano i dati dal foglio google, le gare con le pec inviate non devono essere aggiornate, il flag di pec inviata deve restare"
+      // USER REQUIREMENT: "da inserire un campo data invio da aggioanre con la data corrente per verificare l'effettivo invio della pec e non deve essere aggiornato se si ricaricano le gare."
+      setMatches(prev => mergeMatchesPreservingSent(prev, parsedMatches));
+
       const nowStr = `${formatDateToGGMMMAAAA(new Date())} alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
       setLastSyncTime(nowStr);
       try {
@@ -188,6 +200,15 @@ export default function App() {
     return Array.from(catSet).sort();
   }, [matches, selectedClub]);
 
+  // Total count of sent matches that are currently hidden
+  const totalSentCount = useMemo(() => {
+    return matches.filter(m => {
+      if (selectedClub !== 'ALL' && m.clubId !== selectedClub) return false;
+      if (onlyHomeMatches && !m.isHome) return false;
+      return m.status === 'inviata';
+    }).length;
+  }, [matches, selectedClub, onlyHomeMatches]);
+
   // Filtered matches
   const filteredMatches = useMemo(() => {
     return matches.filter(m => {
@@ -201,7 +222,7 @@ export default function App() {
         return false;
       }
 
-      // Status filter
+      // Status filter (defaults to 'da_inviare' so sent ones are hidden at startup)
       if (statusFilter !== 'ALL' && m.status !== statusFilter) {
         return false;
       }
@@ -211,6 +232,46 @@ export default function App() {
         const matchCat = (m.category || m.campionato || '').toUpperCase();
         if (!matchCat.includes(selectedCategory.toUpperCase())) {
           return false;
+        }
+      }
+
+      // Date Range Filter
+      if (dateRange.preset !== 'ALL') {
+        const matchDateObj = parseMatchDate(m.data);
+        if (matchDateObj) {
+          const now = new Date();
+          if (dateRange.preset === 'CURRENT_MONTH') {
+            if (matchDateObj.getFullYear() !== now.getFullYear() || matchDateObj.getMonth() !== now.getMonth()) {
+              return false;
+            }
+          } else if (dateRange.preset === 'NEXT_MONTH') {
+            const nextMonth = (now.getMonth() + 1) % 12;
+            const nextMonthYear = nextMonth === 0 ? now.getFullYear() + 1 : now.getFullYear();
+            if (matchDateObj.getFullYear() !== nextMonthYear || matchDateObj.getMonth() !== nextMonth) {
+              return false;
+            }
+          } else if (dateRange.preset === 'THIS_WEEKEND') {
+            const dayOfWeek = now.getDay();
+            const diffToFriday = (5 - dayOfWeek + 7) % 7;
+            const fri = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (dayOfWeek === 0 ? -2 : (dayOfWeek === 6 ? -1 : diffToFriday)));
+            fri.setHours(0, 0, 0, 0);
+            const sun = new Date(fri.getFullYear(), fri.getMonth(), fri.getDate() + 2);
+            sun.setHours(23, 59, 59, 999);
+            if (matchDateObj < fri || matchDateObj > sun) {
+              return false;
+            }
+          } else if (dateRange.preset === 'CUSTOM') {
+            if (dateRange.startDate) {
+              const start = new Date(dateRange.startDate);
+              start.setHours(0, 0, 0, 0);
+              if (matchDateObj < start) return false;
+            }
+            if (dateRange.endDate) {
+              const end = new Date(dateRange.endDate);
+              end.setHours(23, 59, 59, 999);
+              if (matchDateObj > end) return false;
+            }
+          }
         }
       }
 
@@ -225,9 +286,10 @@ export default function App() {
 
       return true;
     });
-  }, [matches, selectedClub, onlyHomeMatches, statusFilter, selectedCategory, searchQuery]);
+  }, [matches, selectedClub, onlyHomeMatches, statusFilter, selectedCategory, searchQuery, dateRange]);
 
   // Toggle match status (da_inviare <-> inviata)
+  // When setting to inviata: updates pecSentDate with current date/time if not present
   const handleToggleStatus = (id: string) => {
     setMatches(prev =>
       prev.map(m => {
@@ -236,12 +298,31 @@ export default function App() {
           return {
             ...m,
             status: nextStatus,
-            pecSentDate: nextStatus === 'inviata' ? new Date().toISOString() : undefined,
+            pecSentDate: nextStatus === 'inviata' ? (m.pecSentDate || formatCurrentSendDate()) : undefined,
           };
         }
         return m;
       })
     );
+  };
+
+  // Update specific send date
+  const handleUpdateSentDate = (id: string, newDate: string) => {
+    setMatches(prev =>
+      prev.map(m => {
+        if (m.id === id) {
+          return {
+            ...m,
+            status: 'inviata',
+            pecSentDate: newDate,
+          };
+        }
+        return m;
+      })
+    );
+    if (activePreviewMatch && activePreviewMatch.id === id) {
+      setActivePreviewMatch(prev => prev ? { ...prev, status: 'inviata', pecSentDate: newDate } : null);
+    }
   };
 
   // Toggle match home/away
@@ -286,10 +367,11 @@ export default function App() {
     }
   };
 
-  // Batch mark matches as sent
+  // Batch mark matches as sent with current send date
   const handleMarkMatchesAsSent = (ids: string[]) => {
+    const nowStr = formatCurrentSendDate();
     setMatches(prev =>
-      prev.map(m => (ids.includes(m.id) ? { ...m, status: 'inviata', pecSentDate: new Date().toISOString() } : m))
+      prev.map(m => (ids.includes(m.id) ? { ...m, status: 'inviata', pecSentDate: m.pecSentDate || nowStr } : m))
     );
   };
 
@@ -312,15 +394,15 @@ export default function App() {
     }
   };
 
-  // Import new matches
+  // Import new matches with safe merging
   const handleMatchesImported = (imported: Match[]) => {
-    setMatches(imported);
+    setMatches(prev => mergeMatchesPreservingSent(prev, imported));
     setSelectedMatchIds([]);
   };
 
   // Reset to sample data
   const handleLoadSampleData = () => {
-    setMatches(SAMPLE_MATCHES);
+    setMatches(ensureUniqueMatchIds(SAMPLE_MATCHES));
     setSelectedMatchIds([]);
   };
 
@@ -334,6 +416,7 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onLoadSampleData={handleLoadSampleData}
         onDownloadAllZip={() => downloadAllDraftsAsZip(matches, useDynamicAsdName)}
+        onDownloadAllPdfsZip={() => downloadAllPdfsAsZip(matches, useDynamicAsdName)}
       />
 
       {/* Persistent Google Sheet Sync Bar */}
@@ -361,16 +444,37 @@ export default function App() {
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
         totalFilteredCount={filteredMatches.length}
+        totalSentCount={totalSentCount}
         selectedMatchIds={selectedMatchIds}
         onToggleSelectAll={handleToggleSelectAll}
         isAllSelected={isAllFilteredSelected}
         viewMode={viewMode}
         onToggleViewMode={setViewMode}
+        dateRange={dateRange}
+        onDateRangeChange={setDateRange}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Banner Informative Rules */}
+        {/* Startup Mode Notice (PEC Inviate Nascoste di Default) */}
+        {statusFilter === 'da_inviare' && totalSentCount > 0 && (
+          <div className="mb-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-emerald-950">
+            <div className="flex items-center gap-2">
+              <EyeOff className="w-4 h-4 text-emerald-700 shrink-0" />
+              <span>
+                <strong>Modalità operativa attiva:</strong> visualizzazione esclusiva delle PEC ancora <strong>Da Inviare</strong>. Le <strong>{totalSentCount} gare con PEC già inviata</strong> sono nascoste per facilitare il lavoro.
+              </span>
+            </div>
+            <button
+              onClick={() => setStatusFilter('inviata')}
+              className="font-bold text-emerald-800 hover:text-emerald-950 underline shrink-0 cursor-pointer"
+            >
+              Mostra gare inviate ({totalSentCount})
+            </button>
+          </div>
+        )}
+
+        {/* Banner Informative Rules: Home Matches */}
         {onlyHomeMatches && (
           <div className="mb-4 bg-amber-50/80 border border-amber-200/90 rounded-xl p-3.5 flex items-start justify-between gap-3 text-xs text-amber-950">
             <div className="flex items-start gap-2.5">
@@ -385,7 +489,7 @@ export default function App() {
             </div>
             <button
               onClick={() => setOnlyHomeMatches(false)}
-              className="text-amber-800 hover:text-amber-950 underline font-semibold shrink-0"
+              className="text-amber-800 hover:text-amber-950 underline font-semibold shrink-0 cursor-pointer"
             >
               Mostra anche trasferte
             </button>
@@ -401,9 +505,9 @@ export default function App() {
           />
         ) : filteredMatches.length > 0 ? (
           <div className="space-y-3">
-            {filteredMatches.map(match => (
+            {filteredMatches.map((match, idx) => (
               <MatchItem
-                key={match.id}
+                key={`${match.id}_${idx}`}
                 match={match}
                 isSelected={selectedMatchIds.includes(match.id)}
                 onToggleSelect={() => handleToggleSelectMatch(match.id)}
@@ -412,6 +516,7 @@ export default function App() {
                 onToggleIsHome={() => handleToggleIsHome(match.id)}
                 useDynamicAsdName={useDynamicAsdName}
                 onChangeFacility={() => setFacilityModalMatch(match)}
+                onUpdateSentDate={newDate => handleUpdateSentDate(match.id, newDate)}
               />
             ))}
           </div>
@@ -423,11 +528,21 @@ export default function App() {
               Nessuna gara corrispondente ai filtri
             </h3>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              {onlyHomeMatches
+              {statusFilter === 'da_inviare' && totalSentCount > 0
+                ? `Tutte le gare casalinghe risultano già inviate (${totalSentCount} inviate nascoste). Clicca su "Inviate" o "Tutte" per visualizzarle e scaricare le attestazioni PDF.`
+                : onlyHomeMatches
                 ? 'Non ci sono gare in casa con i filtri selezionati. Prova a disattivare il filtro "Solo Gare In Casa" o a reimpostare la ricerca.'
                 : 'Nessun risultato con i parametri selezionati.'}
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+              {statusFilter === 'da_inviare' && totalSentCount > 0 ? (
+                <button
+                  onClick={() => setStatusFilter('inviata')}
+                  className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 transition-colors cursor-pointer"
+                >
+                  Visualizza le {totalSentCount} Gare Inviate
+                </button>
+              ) : null}
               <button
                 onClick={() => {
                   setSelectedClub('ALL');
@@ -435,14 +550,15 @@ export default function App() {
                   setSelectedCategory('ALL');
                   setSearchQuery('');
                   setStatusFilter('ALL');
+                  setDateRange({ preset: 'ALL' });
                 }}
-                className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+                className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 Reimposta tutti i filtri
               </button>
               <button
                 onClick={() => setIsImportModalOpen(true)}
-                className="px-3.5 py-2 text-xs font-semibold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
+                className="px-3.5 py-2 text-xs font-semibold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 Importa Nuovo Foglio
               </button>
@@ -458,6 +574,7 @@ export default function App() {
         onToggleStatus={handleToggleStatus}
         useDynamicAsdName={useDynamicAsdName}
         onChangeFacility={() => setFacilityModalMatch(activePreviewMatch)}
+        onUpdateSentDate={handleUpdateSentDate}
       />
 
       <FacilityChangeModal

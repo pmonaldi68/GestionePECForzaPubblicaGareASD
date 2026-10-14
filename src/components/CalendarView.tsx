@@ -299,11 +299,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
                   {/* Day Events Container */}
                   <div className="flex-1 space-y-1.5 overflow-y-auto max-h-[120px] scrollbar-none">
-                    {dayMatches.map(m => {
+                    {dayMatches.map((m, mIdx) => {
                       const club = CLUBS[m.clubId] || CLUBS.CYNTHIA_1920;
                       return (
                         <button
-                          key={m.id}
+                          key={`${m.id}_${mIdx}`}
                           onClick={() => onSelectMatch(m)}
                           className="w-full text-left p-1.5 rounded-lg border transition-all hover:scale-[1.02] hover:shadow-xs group cursor-pointer"
                           style={{
@@ -385,11 +385,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
                   {/* Matches on this date */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {group.matches.map(m => {
+                    {group.matches.map((m, mIdx) => {
                       const club = CLUBS[m.clubId];
                       return (
                         <div
-                          key={m.id}
+                          key={`${m.id}_${mIdx}`}
                           className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all flex flex-col justify-between shadow-xs"
                           style={{
                             borderLeftWidth: '4px',

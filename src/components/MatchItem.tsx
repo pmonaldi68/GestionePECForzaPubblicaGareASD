@@ -13,11 +13,18 @@ import {
   Phone, 
   UserCheck, 
   CheckCircle2, 
-  AlertCircle 
+  AlertCircle, 
+  FileText, 
+  CalendarCheck, 
+  Edit2, 
+  MoreVertical, 
+  FileCheck2 
 } from 'lucide-react';
 import { Match } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
 import { generatePecForMatch, formatSeparatedFieldsTxt, downloadTextFile, createMailtoLink } from '../utils/pecGenerator';
+import { downloadMatchPecPdf } from '../utils/pdfGenerator';
+import { formatCurrentSendDate } from '../utils/matchMerger';
 
 interface MatchItemProps {
   match: Match;
@@ -28,6 +35,7 @@ interface MatchItemProps {
   onToggleIsHome: () => void;
   useDynamicAsdName: boolean;
   onChangeFacility: () => void;
+  onUpdateSentDate?: (newDate: string) => void;
 }
 
 export const MatchItem: React.FC<MatchItemProps> = ({
@@ -39,8 +47,13 @@ export const MatchItem: React.FC<MatchItemProps> = ({
   onToggleIsHome,
   useDynamicAsdName,
   onChangeFacility,
+  onUpdateSentDate,
 }) => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [isEditingSentDate, setIsEditingSentDate] = useState<boolean>(false);
+  const [customSentDate, setCustomSentDate] = useState<string>(match.pecSentDate || '');
+  const [showQuickMenu, setShowQuickMenu] = useState<boolean>(false);
+
   const club = CLUBS[match.clubId] || CLUBS.CYNTHIA_1920;
   const pec = generatePecForMatch(match, useDynamicAsdName);
 
@@ -61,6 +74,38 @@ export const MatchItem: React.FC<MatchItemProps> = ({
     downloadTextFile(filename, content);
   };
 
+  const handleDownloadPdf = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // If not yet sent, set current date and mark sent so the certificate has a verified timestamp
+    if (match.status !== 'inviata') {
+      const now = formatCurrentSendDate();
+      if (onUpdateSentDate) {
+        onUpdateSentDate(now);
+      }
+      downloadMatchPecPdf({ ...match, status: 'inviata', pecSentDate: now }, useDynamicAsdName);
+    } else {
+      downloadMatchPecPdf(match, useDynamicAsdName);
+    }
+  };
+
+  const handleSaveSentDate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onUpdateSentDate && customSentDate.trim()) {
+      onUpdateSentDate(customSentDate.trim());
+    }
+    setIsEditingSentDate(false);
+  };
+
+  const handleSetCurrentDateNow = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const now = formatCurrentSendDate();
+    setCustomSentDate(now);
+    if (onUpdateSentDate) {
+      onUpdateSentDate(now);
+    }
+    setIsEditingSentDate(false);
+  };
+
   const mailtoLink = createMailtoLink(
     COMMISSARIATO_INFO.pec,
     pec.oggetto,
@@ -69,10 +114,12 @@ export const MatchItem: React.FC<MatchItemProps> = ({
 
   return (
     <div
-      className={`border rounded-xl transition-all duration-150 bg-white ${
+      className={`border rounded-xl transition-all duration-150 bg-white relative ${
         isSelected
           ? 'border-blue-500 shadow-sm ring-1 ring-blue-500'
-          : 'border-slate-200/80 hover:border-slate-300 shadow-xs'
+          : match.status === 'inviata'
+          ? 'border-emerald-200/90 shadow-2xs bg-emerald-50/15'
+          : 'border-slate-200/90 hover:border-slate-300 shadow-xs'
       }`}
     >
       <div className="p-4 sm:p-5">
@@ -122,21 +169,22 @@ export const MatchItem: React.FC<MatchItemProps> = ({
               <span>{match.isHome ? 'IN CASA' : 'TRASFERTA'}</span>
             </button>
 
-            {/* Status Button */}
+            {/* Status Button (Toggle Sent / Da Inviare) */}
             <button
               onClick={e => {
                 e.stopPropagation();
                 onToggleStatus();
               }}
-              className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border transition-colors ${
+              className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border transition-colors cursor-pointer ${
                 match.status === 'inviata'
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                  ? 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200 shadow-2xs'
                   : 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100'
               }`}
+              title={match.status === 'inviata' ? 'PEC contrassegnata come inviata. Clicca per cambiare stato.' : 'Clicca per registrare l’invio con la data corrente.'}
             >
               {match.status === 'inviata' ? (
                 <>
-                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <CheckCircle2 className="w-3 h-3 text-emerald-700" />
                   <span>PEC Inviata</span>
                 </>
               ) : (
@@ -146,6 +194,79 @@ export const MatchItem: React.FC<MatchItemProps> = ({
                 </>
               )}
             </button>
+
+            {/* Quick Floating Actions Menu Toggle */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  setShowQuickMenu(!showQuickMenu);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+                title="Azioni veloci"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+
+              {showQuickMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-20" 
+                    onClick={e => {
+                      e.stopPropagation();
+                      setShowQuickMenu(false);
+                    }} 
+                  />
+                  <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 text-xs">
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        setShowQuickMenu(false);
+                        onToggleStatus();
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-slate-700"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{match.status === 'inviata' ? 'Segna come Da Inviare' : 'Segna PEC Inviata Oggi'}</span>
+                    </button>
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        setShowQuickMenu(false);
+                        onChangeFacility();
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-slate-700"
+                    >
+                      <MapPin className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Cambia Campo di Gioco</span>
+                    </button>
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        setShowQuickMenu(false);
+                        handleDownloadPdf(e);
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-blue-700 font-semibold"
+                    >
+                      <FileCheck2 className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Scarica Attestazione PDF</span>
+                    </button>
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        setShowQuickMenu(false);
+                        handleDownloadTxt(e);
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-slate-700"
+                    >
+                      <Download className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Salva File .TXT</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -171,18 +292,75 @@ export const MatchItem: React.FC<MatchItemProps> = ({
               <span aria-hidden="true" className="text-slate-300">·</span>
               <span>{match.giornata}</span>
             </div>
+
+            {/* SEND DATE FIELD (Campo Data Invio PEC con aggiornamento alla data corrente) */}
+            <div className="mt-2.5">
+              {match.status === 'inviata' ? (
+                <div className="inline-flex flex-wrap items-center gap-1.5 bg-emerald-50/90 border border-emerald-200/90 rounded-lg px-2.5 py-1 text-xs">
+                  <CalendarCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                  <span className="font-semibold text-emerald-900">Data Invio PEC:</span>
+                  <span className="font-medium text-emerald-800">
+                    {match.pecSentDate || 'Data registrata'}
+                  </span>
+                  
+                  {!isEditingSentDate ? (
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        setCustomSentDate(match.pecSentDate || formatCurrentSendDate());
+                        setIsEditingSentDate(true);
+                      }}
+                      className="ml-1 text-[10px] font-semibold text-emerald-700 hover:text-emerald-950 underline inline-flex items-center gap-0.5"
+                      title="Modifica data e ora invio"
+                    >
+                      <Edit2 className="w-2.5 h-2.5" />
+                      <span>Modifica</span>
+                    </button>
+                  ) : (
+                    <form onSubmit={handleSaveSentDate} className="inline-flex items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
+                      <input
+                        type="text"
+                        value={customSentDate}
+                        onChange={e => setCustomSentDate(e.target.value)}
+                        placeholder="GG/MM/AAAA alle OO:MM"
+                        className="bg-white border border-emerald-300 text-slate-800 px-1.5 py-0.5 rounded text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="submit"
+                        className="bg-emerald-600 text-white px-1.5 py-0.5 rounded text-[10px] font-semibold hover:bg-emerald-700"
+                      >
+                        Salva
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSetCurrentDateNow}
+                        className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[10px] font-semibold hover:bg-emerald-200"
+                        title="Imposta data e ora corrente"
+                      >
+                        Ora
+                      </button>
+                    </form>
+                  )}
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                  <Clock className="w-3 h-3 text-slate-400" />
+                  <span>Nessun invio PEC registrato per questa gara casalinga.</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Date, Time & Facility */}
-          <div className="md:col-span-5 space-y-1 text-xs">
+          <div className="md:col-span-5 space-y-1.5 text-xs">
             <div className="flex items-center gap-3 text-slate-700 font-medium">
               <div className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                <span>{match.data}</span>
+                <span className="font-semibold text-slate-900">{match.data}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-slate-400" />
-                <span>{match.ora}</span>
+                <span className="font-semibold text-slate-900">{match.ora}</span>
               </div>
             </div>
 
@@ -234,18 +412,28 @@ export const MatchItem: React.FC<MatchItemProps> = ({
               <span>Dettagli PEC</span>
             </button>
 
+            {/* OFFICIAL PDF DOWNLOAD (Certificazione di Invio PEC) */}
+            <button
+              onClick={handleDownloadPdf}
+              title={`Scarica attestazione ufficiale PDF con certificazione di invio alla PEC ${COMMISSARIATO_INFO.pec}`}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-md bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors shadow-2xs"
+            >
+              <FileCheck2 className="w-3.5 h-3.5 text-red-600" />
+              <span>Scarica PDF Attestazione</span>
+            </button>
+
             {/* Quick Copy Subject */}
             <button
               onClick={e => handleCopy(pec.oggetto, 'subject', e)}
               title="Copia Oggetto Mail (tutto maiuscolo)"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
             >
               {copiedField === 'subject' ? (
                 <Check className="w-3.5 h-3.5 text-emerald-600" />
               ) : (
                 <Copy className="w-3.5 h-3.5 text-slate-400" />
               )}
-              <span>{copiedField === 'subject' ? 'Copiato!' : 'Copia Oggetto'}</span>
+              <span>{copiedField === 'subject' ? 'Copiato!' : 'Oggetto'}</span>
             </button>
 
             {/* Quick Copy Complete Body */}
@@ -266,10 +454,10 @@ export const MatchItem: React.FC<MatchItemProps> = ({
             <button
               onClick={handleDownloadTxt}
               title="Scarica file di testo con campi separati come richiesto"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
             >
               <Download className="w-3.5 h-3.5 text-slate-400" />
-              <span>Salva .TXT</span>
+              <span>.TXT</span>
             </button>
 
             {/* Open Mailto */}
