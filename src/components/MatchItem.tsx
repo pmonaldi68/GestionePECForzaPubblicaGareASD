@@ -24,7 +24,7 @@ import { Match } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
 import { generatePecForMatch, formatSeparatedFieldsTxt, downloadTextFile, createMailtoLink } from '../utils/pecGenerator';
 import { downloadMatchPecPdf } from '../utils/pdfGenerator';
-import { formatCurrentSendDate } from '../utils/matchMerger';
+import { formatCurrentSendDate, generateProtocolloNumber } from '../utils/matchMerger';
 
 interface MatchItemProps {
   match: Match;
@@ -35,7 +35,8 @@ interface MatchItemProps {
   onToggleIsHome: () => void;
   useDynamicAsdName: boolean;
   onChangeFacility: () => void;
-  onUpdateSentDate?: (newDate: string) => void;
+  onUpdateSentDate?: (newDate: string, newProtocollo?: string) => void;
+  onUpdateProtocollo?: (newProtocollo: string) => void;
 }
 
 export const MatchItem: React.FC<MatchItemProps> = ({
@@ -48,10 +49,12 @@ export const MatchItem: React.FC<MatchItemProps> = ({
   useDynamicAsdName,
   onChangeFacility,
   onUpdateSentDate,
+  onUpdateProtocollo,
 }) => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isEditingSentDate, setIsEditingSentDate] = useState<boolean>(false);
   const [customSentDate, setCustomSentDate] = useState<string>(match.pecSentDate || '');
+  const [customProtocollo, setCustomProtocollo] = useState<string>(match.protocollo || '');
   const [showQuickMenu, setShowQuickMenu] = useState<boolean>(false);
 
   const club = CLUBS[match.clubId] || CLUBS.CYNTHIA_1920;
@@ -76,22 +79,29 @@ export const MatchItem: React.FC<MatchItemProps> = ({
 
   const handleDownloadPdf = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // If not yet sent, set current date and mark sent so the certificate has a verified timestamp
+    // If not yet sent, set current date and generate protocollo so the certificate has verified timestamp & protocol
     if (match.status !== 'inviata') {
       const now = formatCurrentSendDate();
+      const prot = match.protocollo || generateProtocolloNumber();
       if (onUpdateSentDate) {
-        onUpdateSentDate(now);
+        onUpdateSentDate(now, prot);
       }
-      downloadMatchPecPdf({ ...match, status: 'inviata', pecSentDate: now }, useDynamicAsdName);
+      downloadMatchPecPdf({ ...match, status: 'inviata', pecSentDate: now, protocollo: prot }, useDynamicAsdName);
     } else {
-      downloadMatchPecPdf(match, useDynamicAsdName);
+      const prot = match.protocollo || generateProtocolloNumber();
+      if (!match.protocollo && onUpdateProtocollo) {
+        onUpdateProtocollo(prot);
+      }
+      downloadMatchPecPdf({ ...match, protocollo: prot }, useDynamicAsdName);
     }
   };
 
   const handleSaveSentDate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (onUpdateSentDate && customSentDate.trim()) {
-      onUpdateSentDate(customSentDate.trim());
+    const dateToSave = customSentDate.trim() || formatCurrentSendDate();
+    const protToSave = customProtocollo.trim() || match.protocollo || generateProtocolloNumber();
+    if (onUpdateSentDate) {
+      onUpdateSentDate(dateToSave, protToSave);
     }
     setIsEditingSentDate(false);
   };
@@ -99,9 +109,11 @@ export const MatchItem: React.FC<MatchItemProps> = ({
   const handleSetCurrentDateNow = (e: React.MouseEvent) => {
     e.stopPropagation();
     const now = formatCurrentSendDate();
+    const prot = generateProtocolloNumber();
     setCustomSentDate(now);
+    setCustomProtocollo(prot);
     if (onUpdateSentDate) {
-      onUpdateSentDate(now);
+      onUpdateSentDate(now, prot);
     }
     setIsEditingSentDate(false);
   };
@@ -293,49 +305,86 @@ export const MatchItem: React.FC<MatchItemProps> = ({
               <span>{match.giornata}</span>
             </div>
 
-            {/* SEND DATE FIELD (Campo Data Invio PEC con aggiornamento alla data corrente) */}
+            {/* SEND DATE & PROTOCOLLO FIELD */}
             <div className="mt-2.5">
               {match.status === 'inviata' ? (
-                <div className="inline-flex flex-wrap items-center gap-1.5 bg-emerald-50/90 border border-emerald-200/90 rounded-lg px-2.5 py-1 text-xs">
-                  <CalendarCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                  <span className="font-semibold text-emerald-900">Data Invio PEC:</span>
-                  <span className="font-medium text-emerald-800">
-                    {match.pecSentDate || 'Data registrata'}
-                  </span>
+                <div className="inline-flex flex-wrap items-center gap-2 bg-emerald-50/90 border border-emerald-200/90 rounded-lg px-2.5 py-1 text-xs">
+                  {/* Data Invio */}
+                  <div className="flex items-center gap-1.5">
+                    <CalendarCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                    <span className="font-semibold text-emerald-900">Data Invio:</span>
+                    <span className="font-medium text-emerald-800">
+                      {match.pecSentDate || 'Data registrata'}
+                    </span>
+                  </div>
+
+                  <span className="text-emerald-300">·</span>
+
+                  {/* Protocollo AAAAMMGGHHMMSS */}
+                  <div className="flex items-center gap-1">
+                    <FileCheck2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                    <span className="font-semibold text-emerald-900">Protocollo N.:</span>
+                    <span className="font-mono font-bold text-emerald-950 bg-white/90 px-1.5 py-0.5 rounded border border-emerald-300 text-[11px] tracking-wider">
+                      {match.protocollo || 'Non generato'}
+                    </span>
+                    {match.protocollo && (
+                      <button
+                        onClick={e => handleCopy(match.protocollo!, 'protocollo', e)}
+                        className="text-emerald-700 hover:text-emerald-950 p-0.5 rounded cursor-pointer"
+                        title="Copia numero protocollo"
+                      >
+                        {copiedField === 'protocollo' ? (
+                          <Check className="w-3 h-3 text-emerald-700" />
+                        ) : (
+                          <Copy className="w-3 h-3 text-emerald-600" />
+                        )}
+                      </button>
+                    )}
+                  </div>
                   
                   {!isEditingSentDate ? (
                     <button
                       onClick={e => {
                         e.stopPropagation();
                         setCustomSentDate(match.pecSentDate || formatCurrentSendDate());
+                        setCustomProtocollo(match.protocollo || generateProtocolloNumber());
                         setIsEditingSentDate(true);
                       }}
-                      className="ml-1 text-[10px] font-semibold text-emerald-700 hover:text-emerald-950 underline inline-flex items-center gap-0.5"
-                      title="Modifica data e ora invio"
+                      className="ml-1 text-[10px] font-semibold text-emerald-700 hover:text-emerald-950 underline inline-flex items-center gap-0.5 cursor-pointer"
+                      title="Modifica data e protocollo"
                     >
                       <Edit2 className="w-2.5 h-2.5" />
                       <span>Modifica</span>
                     </button>
                   ) : (
-                    <form onSubmit={handleSaveSentDate} className="inline-flex items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
+                    <form onSubmit={handleSaveSentDate} className="inline-flex flex-wrap items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
                       <input
                         type="text"
                         value={customSentDate}
                         onChange={e => setCustomSentDate(e.target.value)}
                         placeholder="GG/MM/AAAA alle OO:MM"
+                        title="Data e ora invio"
                         className="bg-white border border-emerald-300 text-slate-800 px-1.5 py-0.5 rounded text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                      <input
+                        type="text"
+                        value={customProtocollo}
+                        onChange={e => setCustomProtocollo(e.target.value)}
+                        placeholder="AAAAMMGGHHMMSS"
+                        title="Numero protocollo (AAAAMMGGHHMMSS)"
+                        className="bg-white border border-emerald-300 text-slate-800 px-1.5 py-0.5 rounded text-[11px] font-mono w-36 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                       />
                       <button
                         type="submit"
-                        className="bg-emerald-600 text-white px-1.5 py-0.5 rounded text-[10px] font-semibold hover:bg-emerald-700"
+                        className="bg-emerald-600 text-white px-1.5 py-0.5 rounded text-[10px] font-semibold hover:bg-emerald-700 cursor-pointer"
                       >
                         Salva
                       </button>
                       <button
                         type="button"
                         onClick={handleSetCurrentDateNow}
-                        className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[10px] font-semibold hover:bg-emerald-200"
-                        title="Imposta data e ora corrente"
+                        className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[10px] font-semibold hover:bg-emerald-200 cursor-pointer"
+                        title="Imposta data e protocollo correnti"
                       >
                         Ora
                       </button>

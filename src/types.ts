@@ -40,6 +40,7 @@ export interface Match {
   category: string;
   status: 'da_inviare' | 'inviata' | 'annullata';
   pecSentDate?: string;
+  protocollo?: string; // Formato AAAAMMGGHHMMSS, progressivo ordinato da data/ora corrente
   notes?: string;
   rawRowIndex?: number;
 }

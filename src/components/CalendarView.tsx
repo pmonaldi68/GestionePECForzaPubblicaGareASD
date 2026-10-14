@@ -440,7 +440,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             <span className="text-xs">
                               {m.status === 'inviata' ? (
                                 <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> PEC Inviata
+                                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                                  <span>Inviata {m.protocollo ? `· Prot. ${m.protocollo}` : ''}</span>
                                 </span>
                               ) : (
                                 <span className="text-rose-700 font-semibold flex items-center gap-1">

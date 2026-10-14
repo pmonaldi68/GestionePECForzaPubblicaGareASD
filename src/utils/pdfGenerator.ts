@@ -4,21 +4,23 @@ import { Match, ClubId } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
 import { generatePecForMatch } from './pecGenerator';
 import { normalizeToGGMMMAAAA } from './dateUtils';
-import { formatCurrentSendDate } from './matchMerger';
+import { formatCurrentSendDate, generateProtocolloNumber } from './matchMerger';
 
 // ==========================================
 // EXPLICIT DOCUMENT DIMENSIONS & MARGINS (A4)
+// Standard A4: 210 x 297 mm
+// Strict Margins: 16 mm left/right, 15 mm top/bottom
 // ==========================================
 export const PAGE_WIDTH_MM = 210;
 export const PAGE_HEIGHT_MM = 297;
 
-export const MARGIN_LEFT_MM = 15;
-export const MARGIN_RIGHT_MM = 15;
-export const MARGIN_TOP_MM = 14;
-export const MARGIN_BOTTOM_MM = 14;
+export const MARGIN_LEFT_MM = 16;
+export const MARGIN_RIGHT_MM = 16;
+export const MARGIN_TOP_MM = 15;
+export const MARGIN_BOTTOM_MM = 15;
 
-export const CONTENT_WIDTH_MM = PAGE_WIDTH_MM - MARGIN_LEFT_MM - MARGIN_RIGHT_MM; // Exactly 180 mm
-export const CONTENT_HEIGHT_MM = PAGE_HEIGHT_MM - MARGIN_TOP_MM - MARGIN_BOTTOM_MM; // Exactly 269 mm
+export const CONTENT_WIDTH_MM = PAGE_WIDTH_MM - MARGIN_LEFT_MM - MARGIN_RIGHT_MM; // Exactly 178 mm
+export const CONTENT_HEIGHT_MM = PAGE_HEIGHT_MM - MARGIN_TOP_MM - MARGIN_BOTTOM_MM; // Exactly 267 mm
 
 /**
  * Standard font configured for universal Italian text support.
@@ -108,7 +110,7 @@ export function generateMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
     orientation: 'portrait',
     unit: 'mm',
     format: 'a4',
-    compress: true,
+    compress: false,
   });
 
   const club = CLUBS[match.clubId] || CLUBS.CYNTHIA_1920;
@@ -120,6 +122,12 @@ export function generateMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
     ? match.pecSentDate
     : `${normalizeToGGMMMAAAA(new Date().toLocaleDateString('it-IT'))} alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
   const sendDateText = sanitizePdfText(rawSendDate);
+
+  // Protocol number (format AAAAMMGGHHMMSS)
+  const protocolloNumber = match.protocollo && match.protocollo.trim()
+    ? match.protocollo.trim()
+    : generateProtocolloNumber();
+  const protocolloText = sanitizePdfText(protocolloNumber);
 
   const marginLeft = MARGIN_LEFT_MM;
   const contentWidth = CONTENT_WIDTH_MM;
@@ -146,7 +154,7 @@ export function generateMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139);
     doc.text(
-      sanitizePdfText(`${club.name} - Attestazione PEC Forza Pubblica (Continua)`),
+      sanitizePdfText(`${club.name} - Attestazione PEC Forza Pubblica (Continua - Prot. ${protocolloText})`),
       marginLeft,
       currentY
     );
@@ -166,7 +174,7 @@ export function generateMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.setFontSize(11);
   doc.setTextColor(15, 23, 42); // slate-900
-  const clubNameLines = doc.splitTextToSize(sanitizePdfText(club.name.toUpperCase()), contentWidth * 0.60);
+  const clubNameLines = doc.splitTextToSize(sanitizePdfText(club.name.toUpperCase()), contentWidth * 0.58);
   doc.text(clubNameLines, marginLeft, currentY);
 
   // Right: Commissariato Reference
@@ -186,8 +194,11 @@ export function generateMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
     currentY
   );
 
-  // Right: Commissariato City
-  doc.text('GENZANO DI ROMA (RM)', marginLeft + contentWidth, currentY, { align: 'right' });
+  // Right: Commissariato City & Protocol Reference
+  doc.setFont(PDF_FONT_FAMILY, 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(2, 132, 199);
+  doc.text(`PROT. REGISTRAZIONE: ${protocolloText}`, marginLeft + contentWidth, currentY, { align: 'right' });
   currentY += 4.5;
 
   // Title of the document
@@ -215,53 +226,50 @@ export function generateMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
   currentY += 4.5;
 
   // --- 3. CERTIFICATION BOX (Green Institutional Box) ---
-  const certBoxHeight = 24;
+  const certBoxHeight = 30;
   doc.setFillColor(240, 253, 244); // light emerald-50
   doc.setDrawColor(167, 243, 208); // emerald-200
   doc.setLineWidth(0.5);
   doc.roundedRect(marginLeft, currentY, contentWidth, certBoxHeight, 2, 2, 'FD');
 
-  let boxY = currentY + 4.5;
+  let boxY = currentY + 4.2;
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(6, 95, 70); // emerald-800
-  doc.text('DICHIARAZIONE DI AVVENUTA TRASMISSIONE ALLA PUBBLICA SICUREZZA', marginLeft + 4, boxY);
+  doc.text('ATTESTAZIONE UFFICIALE DI NOTIFICA A MEZZO PEC', marginLeft + 4, boxY);
+
+  doc.setFont(PDF_FONT_FAMILY, 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(16, 185, 129); // emerald-600
+  doc.text(`PROTOCOLLO N. ${protocolloText}`, marginLeft + contentWidth - 4, boxY, { align: 'right' });
   boxY += 4.2;
 
+  // Formal certification statement as explicitly requested
   doc.setFont(PDF_FONT_FAMILY, 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(15, 23, 42);
-  doc.text(
-    sanitizePdfText("Si attesta che la presente richiesta di Forza Pubblica è stata regolarmente trasmessa alla PEC:"),
-    marginLeft + 4,
-    boxY
+  const certStatementLines = doc.splitTextToSize(
+    sanitizePdfText(`Si attesta formalmente che la presente comunicazione è stata inviata alla PEC ${COMMISSARIATO_INFO.pec} (${COMMISSARIATO_INFO.name}) nella data di invio: ${sendDateText}, con Protocollo Identificativo N. ${protocolloText}.`),
+    contentWidth - 8
   );
-  boxY += 4.2;
+  doc.text(certStatementLines, marginLeft + 4, boxY);
+  boxY += certStatementLines.length * 3.4 + 2;
 
-  // PEC Address & Recipient
+  // Metadata row
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(2, 132, 199);
-  doc.text(COMMISSARIATO_INFO.pec, marginLeft + 4, boxY);
-
-  doc.setFont(PDF_FONT_FAMILY, 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(71, 85, 105);
-  doc.text(sanitizePdfText(` (${COMMISSARIATO_INFO.name})`), marginLeft + 76, boxY);
-  boxY += 4.5;
-
-  // Verified Send Date
-  doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(7.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text('Data e ora effettiva di invio salvata:', marginLeft + 4, boxY);
+  doc.text('Data Invio:', marginLeft + 4, boxY);
 
   doc.setTextColor(180, 83, 9); // amber-700
-  doc.text(sendDateText, marginLeft + 56, boxY);
+  doc.text(sendDateText, marginLeft + 20, boxY);
+
+  doc.setTextColor(71, 85, 105);
+  doc.text('Numero Protocollo (AAAAMMGGHHMMSS):', marginLeft + 75, boxY);
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setTextColor(16, 185, 129); // emerald-600
-  doc.text('[REGISTRATA A PROTOCOLLO INTERNO]', marginLeft + contentWidth - 4, boxY, { align: 'right' });
+  doc.setTextColor(15, 23, 42);
+  doc.text(protocolloText, marginLeft + 138, boxY);
 
   currentY += certBoxHeight + 4.5;
 
@@ -484,7 +492,7 @@ export function generateMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
   doc.setFontSize(6.5);
   doc.setTextColor(148, 163, 184);
   const footerNote = sanitizePdfText(
-    `Documento informatico ad uso prova invio PEC a ${COMMISSARIATO_INFO.pec}. Data invio registrata: ${sendDateText}. ID Gara: ${match.id}`
+    `Documento informatico ad uso prova invio PEC a ${COMMISSARIATO_INFO.pec}. Protocollo N.: ${protocolloText} - Data invio registrata: ${sendDateText}. ID Gara: ${match.id}`
   );
   doc.text(footerNote, marginLeft, pageHeight - marginBottom - 2);
 
@@ -495,16 +503,20 @@ export function generateMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
  * Directly downloads the PDF receipt for a match
  */
 export function downloadMatchPecPdf(match: Match, useDynamicAsdName: boolean = true): void {
-  const doc = generateMatchPecPdf(match, useDynamicAsdName);
+  const protocollo = match.protocollo && match.protocollo.trim() 
+    ? match.protocollo.trim() 
+    : generateProtocolloNumber();
+  const matchWithProt = { ...match, protocollo };
+  const doc = generateMatchPecPdf(matchWithProt, useDynamicAsdName);
   const safeDate = match.data.replace(/[^0-9]/g, '-');
   const safeHome = match.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_');
   const safeAway = match.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_');
-  const filename = `Attestazione_PEC_ForzaPubblica_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
+  const filename = `Attestazione_PEC_Prot_${protocollo}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
   doc.save(filename);
 }
 
 /**
- * Downloads a ZIP archive of all home match PDF certifications
+ * Downloads a ZIP archive of all home match PDF certifications with sequential protocol advancement
  */
 export async function downloadAllPdfsAsZip(matches: Match[], useDynamicAsdName: boolean = true): Promise<void> {
   const homeMatches = matches.filter(m => m.isHome);
@@ -512,13 +524,16 @@ export async function downloadAllPdfsAsZip(matches: Match[], useDynamicAsdName: 
 
   const zip = new JSZip();
   const folder = zip.folder('Attestazioni_PEC_PDF');
+  const now = new Date();
   const nowStr = formatCurrentSendDate();
 
   homeMatches.forEach((m, idx) => {
+    const protocollo = m.protocollo || generateProtocolloNumber(now, idx);
     const matchForPdf: Match = {
       ...m,
       status: 'inviata',
       pecSentDate: m.pecSentDate || nowStr,
+      protocollo,
     };
     const doc = generateMatchPecPdf(matchForPdf, useDynamicAsdName);
     const pdfArrayBuffer = doc.output('arraybuffer');
@@ -526,7 +541,7 @@ export async function downloadAllPdfsAsZip(matches: Match[], useDynamicAsdName: 
     const safeClub = m.clubId;
     const safeHome = m.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_');
     const safeAway = m.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_');
-    const filename = `Attestazione_${String(idx + 1).padStart(2, '0')}_${safeClub}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
+    const filename = `Attestazione_${String(idx + 1).padStart(2, '0')}_Prot_${protocollo}_${safeClub}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
     folder?.file(filename, pdfArrayBuffer);
   });
 

@@ -16,7 +16,7 @@ import { downloadAllDraftsAsZip } from './utils/pecGenerator';
 import { downloadAllPdfsAsZip } from './utils/pdfGenerator';
 import { getGoogleSheetsCsvUrl, parseRawText, DEFAULT_COLUMN_MAPPING } from './utils/sheetParser';
 import { formatDateToGGMMMAAAA, parseMatchDate } from './utils/dateUtils';
-import { mergeMatchesPreservingSent, formatCurrentSendDate, ensureUniqueMatchIds } from './utils/matchMerger';
+import { mergeMatchesPreservingSent, formatCurrentSendDate, generateProtocolloNumber, ensureUniqueMatchIds } from './utils/matchMerger';
 
 const STORAGE_KEY = 'asd_pec_matches_v1';
 const DYNAMIC_ASD_KEY = 'asd_pec_dynamic_name_v1';
@@ -289,7 +289,7 @@ export default function App() {
   }, [matches, selectedClub, onlyHomeMatches, statusFilter, selectedCategory, searchQuery, dateRange]);
 
   // Toggle match status (da_inviare <-> inviata)
-  // When setting to inviata: updates pecSentDate with current date/time if not present
+  // When setting to inviata: generates protocollo (AAAAMMGGHHMMSS) and sets pecSentDate
   const handleToggleStatus = (id: string) => {
     setMatches(prev =>
       prev.map(m => {
@@ -299,6 +299,7 @@ export default function App() {
             ...m,
             status: nextStatus,
             pecSentDate: nextStatus === 'inviata' ? (m.pecSentDate || formatCurrentSendDate()) : undefined,
+            protocollo: nextStatus === 'inviata' ? (m.protocollo || generateProtocolloNumber()) : undefined,
           };
         }
         return m;
@@ -306,8 +307,8 @@ export default function App() {
     );
   };
 
-  // Update specific send date
-  const handleUpdateSentDate = (id: string, newDate: string) => {
+  // Update specific send date and protocollo
+  const handleUpdateSentDate = (id: string, newDate: string, newProtocollo?: string) => {
     setMatches(prev =>
       prev.map(m => {
         if (m.id === id) {
@@ -315,13 +316,33 @@ export default function App() {
             ...m,
             status: 'inviata',
             pecSentDate: newDate,
+            protocollo: newProtocollo || m.protocollo || generateProtocolloNumber(),
           };
         }
         return m;
       })
     );
     if (activePreviewMatch && activePreviewMatch.id === id) {
-      setActivePreviewMatch(prev => prev ? { ...prev, status: 'inviata', pecSentDate: newDate } : null);
+      setActivePreviewMatch(prev =>
+        prev
+          ? {
+              ...prev,
+              status: 'inviata',
+              pecSentDate: newDate,
+              protocollo: newProtocollo || prev.protocollo || generateProtocolloNumber(),
+            }
+          : null
+      );
+    }
+  };
+
+  // Update protocollo directly
+  const handleUpdateProtocollo = (id: string, newProtocollo: string) => {
+    setMatches(prev =>
+      prev.map(m => (m.id === id ? { ...m, protocollo: newProtocollo } : m))
+    );
+    if (activePreviewMatch && activePreviewMatch.id === id) {
+      setActivePreviewMatch(prev => (prev ? { ...prev, protocollo: newProtocollo } : null));
     }
   };
 
@@ -367,11 +388,23 @@ export default function App() {
     }
   };
 
-  // Batch mark matches as sent with current send date
+  // Batch mark matches as sent with current send date and ordered advancing protocollo (AAAAMMGGHHMMSS)
   const handleMarkMatchesAsSent = (ids: string[]) => {
+    const now = new Date();
     const nowStr = formatCurrentSendDate();
+    let offsetSec = 0;
     setMatches(prev =>
-      prev.map(m => (ids.includes(m.id) ? { ...m, status: 'inviata', pecSentDate: m.pecSentDate || nowStr } : m))
+      prev.map(m => {
+        if (ids.includes(m.id)) {
+          return {
+            ...m,
+            status: 'inviata',
+            pecSentDate: m.pecSentDate || nowStr,
+            protocollo: m.protocollo || generateProtocolloNumber(now, offsetSec++),
+          };
+        }
+        return m;
+      })
     );
   };
 
@@ -516,7 +549,8 @@ export default function App() {
                 onToggleIsHome={() => handleToggleIsHome(match.id)}
                 useDynamicAsdName={useDynamicAsdName}
                 onChangeFacility={() => setFacilityModalMatch(match)}
-                onUpdateSentDate={newDate => handleUpdateSentDate(match.id, newDate)}
+                onUpdateSentDate={(newDate, newProt) => handleUpdateSentDate(match.id, newDate, newProt)}
+                onUpdateProtocollo={newProt => handleUpdateProtocollo(match.id, newProt)}
               />
             ))}
           </div>

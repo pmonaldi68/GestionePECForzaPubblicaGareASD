@@ -21,7 +21,7 @@ import { Match } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
 import { generatePecForMatch, formatSeparatedFieldsTxt, downloadTextFile, createMailtoLink } from '../utils/pecGenerator';
 import { downloadMatchPecPdf } from '../utils/pdfGenerator';
-import { formatCurrentSendDate } from '../utils/matchMerger';
+import { formatCurrentSendDate, generateProtocolloNumber } from '../utils/matchMerger';
 
 interface PecPreviewModalProps {
   match: Match | null;
@@ -29,7 +29,7 @@ interface PecPreviewModalProps {
   onToggleStatus: (matchId: string) => void;
   useDynamicAsdName: boolean;
   onChangeFacility?: () => void;
-  onUpdateSentDate?: (matchId: string, newDate: string) => void;
+  onUpdateSentDate?: (matchId: string, newDate: string, newProtocollo?: string) => void;
 }
 
 export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
@@ -43,6 +43,7 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isEditingDate, setIsEditingDate] = useState<boolean>(false);
   const [customDate, setCustomDate] = useState<string>('');
+  const [customProtocollo, setCustomProtocollo] = useState<string>('');
 
   if (!match) return null;
 
@@ -65,31 +66,39 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
   };
 
   const handleDownloadPdf = () => {
-    // If not yet sent, set current timestamp
+    const prot = match.protocollo || generateProtocolloNumber();
+    // If not yet sent, set current timestamp and protocollo
     if (match.status !== 'inviata') {
       const now = formatCurrentSendDate();
       if (onUpdateSentDate) {
-        onUpdateSentDate(match.id, now);
+        onUpdateSentDate(match.id, now, prot);
       }
-      downloadMatchPecPdf({ ...match, status: 'inviata', pecSentDate: now }, useDynamicAsdName);
+      downloadMatchPecPdf({ ...match, status: 'inviata', pecSentDate: now, protocollo: prot }, useDynamicAsdName);
     } else {
-      downloadMatchPecPdf(match, useDynamicAsdName);
+      if (!match.protocollo && onUpdateSentDate) {
+        onUpdateSentDate(match.id, match.pecSentDate || formatCurrentSendDate(), prot);
+      }
+      downloadMatchPecPdf({ ...match, protocollo: prot }, useDynamicAsdName);
     }
   };
 
   const handleSaveCustomDate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (onUpdateSentDate && customDate.trim()) {
-      onUpdateSentDate(match.id, customDate.trim());
+    const dateToSave = customDate.trim() || formatCurrentSendDate();
+    const protToSave = customProtocollo.trim() || match.protocollo || generateProtocolloNumber();
+    if (onUpdateSentDate) {
+      onUpdateSentDate(match.id, dateToSave, protToSave);
     }
     setIsEditingDate(false);
   };
 
   const handleSetDateToNow = () => {
     const now = formatCurrentSendDate();
+    const prot = generateProtocolloNumber();
     setCustomDate(now);
+    setCustomProtocollo(prot);
     if (onUpdateSentDate) {
-      onUpdateSentDate(match.id, now);
+      onUpdateSentDate(match.id, now, prot);
     }
     setIsEditingDate(false);
   };
@@ -174,43 +183,78 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
                 </span>
               </div>
 
-              {/* Saved Send Date Info */}
-              <div className="mt-2 text-xs flex flex-wrap items-center gap-1.5">
-                <span className="font-semibold text-slate-700">Data e Ora Invio Registrata:</span>
-                <span className="font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                  {match.pecSentDate || (match.status === 'inviata' ? 'Data odierna' : 'Non ancora inviata')}
-                </span>
+              {/* Saved Send Date & Protocollo Info */}
+              <div className="mt-2.5 text-xs flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-700">Data e Ora Invio:</span>
+                  <span className="font-mono font-bold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                    {match.pecSentDate || (match.status === 'inviata' ? 'Data odierna' : 'Non ancora inviata')}
+                  </span>
+                </div>
+
+                <span className="text-emerald-300">·</span>
+
+                <div className="flex items-center gap-1 font-mono">
+                  <span className="font-sans font-semibold text-slate-700">Protocollo:</span>
+                  <span className="font-bold text-emerald-950 bg-white px-2 py-0.5 rounded border border-emerald-300 tracking-wider">
+                    {match.protocollo || (match.status === 'inviata' ? 'In assegnazione' : 'Non ancora generato')}
+                  </span>
+                  {match.protocollo && (
+                    <button
+                      onClick={() => handleCopy(match.protocollo!, 'protocollo_modal')}
+                      className="text-emerald-700 hover:text-emerald-950 p-0.5 rounded cursor-pointer"
+                      title="Copia protocollo"
+                    >
+                      {copiedKey === 'protocollo_modal' ? (
+                        <Check className="w-3 h-3 text-emerald-700" />
+                      ) : (
+                        <Copy className="w-3 h-3 text-emerald-600" />
+                      )}
+                    </button>
+                  )}
+                </div>
 
                 {!isEditingDate ? (
                   <button
                     onClick={() => {
                       setCustomDate(match.pecSentDate || formatCurrentSendDate());
+                      setCustomProtocollo(match.protocollo || generateProtocolloNumber());
                       setIsEditingDate(true);
                     }}
-                    className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 underline ml-1 inline-flex items-center gap-0.5"
+                    className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 underline ml-1 inline-flex items-center gap-0.5 cursor-pointer"
                   >
                     <Edit3 className="w-3 h-3" />
-                    <span>Modifica data invio</span>
+                    <span>Modifica data / protocollo</span>
                   </button>
                 ) : (
-                  <form onSubmit={handleSaveCustomDate} className="inline-flex items-center gap-1 ml-1">
+                  <form onSubmit={handleSaveCustomDate} className="inline-flex flex-wrap items-center gap-1 ml-1">
                     <input
                       type="text"
                       value={customDate}
                       onChange={e => setCustomDate(e.target.value)}
                       placeholder="GG/MM/AAAA alle OO:MM"
+                      title="Data e ora invio"
                       className="bg-white border border-slate-300 text-slate-800 px-2 py-0.5 rounded text-xs font-mono"
+                    />
+                    <input
+                      type="text"
+                      value={customProtocollo}
+                      onChange={e => setCustomProtocollo(e.target.value)}
+                      placeholder="Prot: AAAAMMGGHHMMSS"
+                      title="Numero protocollo (AAAAMMGGHHMMSS)"
+                      className="bg-white border border-slate-300 text-slate-800 px-2 py-0.5 rounded text-xs font-mono w-36"
                     />
                     <button
                       type="submit"
-                      className="bg-emerald-600 text-white px-2 py-0.5 rounded text-xs font-semibold hover:bg-emerald-700"
+                      className="bg-emerald-600 text-white px-2 py-0.5 rounded text-xs font-semibold hover:bg-emerald-700 cursor-pointer"
                     >
                       Salva
                     </button>
                     <button
                       type="button"
                       onClick={handleSetDateToNow}
-                      className="bg-slate-200 text-slate-800 px-2 py-0.5 rounded text-xs font-semibold hover:bg-slate-300"
+                      className="bg-slate-200 text-slate-800 px-2 py-0.5 rounded text-xs font-semibold hover:bg-slate-300 cursor-pointer"
+                      title="Imposta data e protocollo correnti"
                     >
                       Ora
                     </button>

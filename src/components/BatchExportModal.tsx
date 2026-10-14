@@ -9,7 +9,7 @@ import {
   downloadTextFile 
 } from '../utils/pecGenerator';
 import { generateMatchPecPdf } from '../utils/pdfGenerator';
-import { formatCurrentSendDate } from '../utils/matchMerger';
+import { formatCurrentSendDate, generateProtocolloNumber } from '../utils/matchMerger';
 import { normalizeToGGMMMAAAA, formatDateToGGMMMAAAA } from '../utils/dateUtils';
 
 interface BatchExportModalProps {
@@ -135,14 +135,16 @@ Totale gare incluse: ${targetMatches.length}
     try {
       const zip = new JSZip();
       const folder = zip.folder('Attestazioni_PEC_PDF');
+      const now = new Date();
       const nowStr = formatCurrentSendDate();
 
-      targetMatches.forEach(m => {
-        // Ensure sent date is populated on certificate
+      targetMatches.forEach((m, idx) => {
+        // Ensure sent date and ordered sequential protocollo is populated on certificate
         const matchForPdf: Match = {
           ...m,
           status: 'inviata',
           pecSentDate: m.pecSentDate || nowStr,
+          protocollo: m.protocollo || generateProtocolloNumber(now, idx),
         };
 
         const doc = generateMatchPecPdf(matchForPdf, useDynamicAsdName);

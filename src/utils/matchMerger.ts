@@ -46,6 +46,26 @@ export function formatCurrentSendDate(): string {
 }
 
 /**
+ * Generates an orderly protocol number in AAAAMMGGHHMMSS format from date and time.
+ * "quando si spunta come pec inviata creami un campo protocollo con avanzamento ordinato 
+ * con un numero da riportate sull'attestazione pdf, il formato del numero dovrà essere 
+ * AAAAMMGGHHMMSS, presa dalla data e ora corrente."
+ * 
+ * An optional offsetSeconds ensures orderly sequential progression when multiple items 
+ * are flagged in batch at the same exact time.
+ */
+export function generateProtocolloNumber(baseDate: Date = new Date(), offsetSeconds: number = 0): string {
+  const d = new Date(baseDate.getTime() + offsetSeconds * 1000);
+  const year = d.getFullYear().toString();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  return `${year}${month}${day}${hours}${minutes}${seconds}`;
+}
+
+/**
  * Guarantees that every match in the provided list has a strictly unique, stable ID.
  * Prevents React key duplication errors (e.g. from sheet parsing, localStorage, or merging).
  */
