@@ -5,9 +5,26 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    base: './',
     plugins: [
       react(),
       tailwindcss(),
+      {
+        name: 'github-pages-404-fallback',
+        closeBundle() {
+          try {
+            const fs = require('fs');
+            const path = require('path');
+            const distIndex = path.resolve(import.meta.dirname, 'dist', 'index.html');
+            const dist404 = path.resolve(import.meta.dirname, 'dist', '404.html');
+            if (fs.existsSync(distIndex)) {
+              fs.copyFileSync(distIndex, dist404);
+            }
+          } catch {
+            // ignore if not building dist
+          }
+        },
+      },
       {
         name: 'sheet-proxy',
         configureServer(server) {
@@ -47,7 +64,7 @@ export default defineConfig(() => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       },
     },
     server: {

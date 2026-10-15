@@ -106,24 +106,25 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
  * - Automatic pagination if the PEC message exceeds the single page boundary
  */
 /**
- * Generates an official, perfectly formatted PDF document certifying the transmission
- * of the PEC to the Police Department (dipps172.5600@pecps.poliziadistato.it).
+ * Renders a complete, single-page official PDF certification for a match
+ * onto the active page of a jsPDF document.
  * 
  * Guarantees:
  * - Strictly 1 single A4 page (210 x 297 mm) with zero spillover or pagination bugs
+ * - Larger, highly legible typography with generous line-height across the entire document
+ * - Subtle institutional 'Ufficiale' watermark and official circular stamp in the background
  * - Full Italian character encoding support with Helvetica standard PostScript font
- * - Display of Protocollo number without "(AAAAMMGGHHMMSS)" placeholder
- * - Removal of obsolete "Timbro e Firma del Legale Rappresentante"
+ * - Clean display of Protocollo number without obsolete "(AAAAMMGGHHMMSS)" placeholder
+ * - Complete removal of obsolete "Timbro e Firma del Legale Rappresentante"
  * - Impeccably formatted, centered institutional footer with audit reference
  */
-export function generateMatchPecPdf(match: Match, useDynamicAsdName: boolean = true): jsPDF {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-    compress: false,
-  });
-
+export function renderMatchPecPage(
+  doc: jsPDF,
+  match: Match,
+  useDynamicAsdName: boolean = true,
+  pageNumber: number = 1,
+  totalPages: number = 1
+): void {
   const club = CLUBS[match.clubId] || CLUBS.CYNTHIA_1920;
   const pec = generatePecForMatch(match, useDynamicAsdName);
   const matchDate = normalizeToGGMMMAAAA(match.data);
@@ -140,35 +141,57 @@ export function generateMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
     : generateProtocolloNumber();
   const protocolloText = sanitizePdfText(protocolloNumber);
 
-  const marginLeft = MARGIN_LEFT_MM;
-  const contentWidth = CONTENT_WIDTH_MM;
+  const marginLeft = 15;
+  const contentWidth = 180;
   const clubColor = hexToRgb(club.primaryColor || '#0284c7');
+
+  // =========================================================================
+  // --- 1. SUBTLE 'UFFICIALE' WATERMARK & INSTITUTIONAL BACKGROUND STAMP ---
+  // =========================================================================
+  doc.setTextColor(242, 245, 250); // very soft, unobtrusive slate/blue tint
+  doc.setFont(PDF_FONT_FAMILY, 'bold');
+  doc.setFontSize(60);
+  doc.text('UFFICIALE', 105, 155, { align: 'center', angle: 28 });
+
+  // Subtle circular watermark seal
+  doc.setDrawColor(240, 244, 250);
+  doc.setLineWidth(0.6);
+  doc.circle(105, 155, 36);
+  doc.circle(105, 155, 33);
+  doc.setFontSize(7.5);
+  doc.setTextColor(235, 240, 248);
+  doc.text('ATTESTAZIONE UFFICIALE * NOTIFICA PEC ART. 62 NOIF', 105, 126, { align: 'center' });
+  doc.text('* COMMISSARIATO DI PUBBLICA SICUREZZA *', 105, 186, { align: 'center' });
 
   let currentY = 12;
 
-  // --- 1. TOP COLORED ACCENT BAR ---
+  // =========================================================================
+  // --- 2. TOP COLORED ACCENT BAR ---
+  // =========================================================================
   doc.setFillColor(clubColor.r, clubColor.g, clubColor.b);
   doc.rect(marginLeft, currentY, contentWidth, 2.5, 'F');
-  currentY += 5;
+  currentY += 5.5;
 
-  // --- 2. INSTITUTIONAL HEADER ---
-  // Left: Club Name
+  // =========================================================================
+  // --- 3. INSTITUTIONAL HEADER (Larger & More Readable) ---
+  // =========================================================================
+  // Left: Club Name (Large & Prominent)
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(10.5);
+  doc.setFontSize(12);
   doc.setTextColor(15, 23, 42); // slate-900
-  const clubNameLines = doc.splitTextToSize(sanitizePdfText(club.name.toUpperCase()), contentWidth * 0.58);
+  const clubNameLines = doc.splitTextToSize(sanitizePdfText(club.name.toUpperCase()), contentWidth * 0.62);
   doc.text(clubNameLines, marginLeft, currentY);
 
   // Right: Commissariato Reference
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(8.5);
   doc.setTextColor(71, 85, 105);
   doc.text('COMMISSARIATO DI PUBBLICA SICUREZZA', marginLeft + contentWidth, currentY, { align: 'right' });
-  currentY += Math.max(clubNameLines.length * 4.0, 4.2);
+  currentY += Math.max(clubNameLines.length * 4.6, 5.0);
 
   // Left: Officials Info
   doc.setFont(PDF_FONT_FAMILY, 'normal');
-  doc.setFontSize(7);
+  doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
   doc.text(
     sanitizePdfText(`Pres. ${club.president} | Ref. ${club.contactName} (${club.contactPhone})`),
@@ -178,268 +201,323 @@ export function generateMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
 
   // Right: Commissariato Protocol Reference
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(7.5);
-  doc.setTextColor(2, 132, 199);
+  doc.setFontSize(9);
+  doc.setTextColor(clubColor.r, clubColor.g, clubColor.b);
   doc.text(`PROT.: ${protocolloText}`, marginLeft + contentWidth, currentY, { align: 'right' });
-  currentY += 4.2;
+  currentY += 5.0;
 
   // Title of the document
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(9.5);
-  doc.setTextColor(2, 132, 199);
+  doc.setFontSize(11);
+  doc.setTextColor(clubColor.r, clubColor.g, clubColor.b);
   doc.text('ATTESTAZIONE DI TRASMISSIONE PEC - RICHIESTA FORZA PUBBLICA', marginLeft, currentY);
-  currentY += 3.8;
+  currentY += 4.5;
 
-  // Subtitle
+  // Subtitle NOIF
   doc.setFont(PDF_FONT_FAMILY, 'italic');
-  doc.setFontSize(7);
+  doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
   doc.text(
     sanitizePdfText("Ai sensi e per gli effetti dell'Art. 62 commi 4 e 5 delle N.O.I.F. (Federazione Italiana Giuoco Calcio)"),
     marginLeft,
     currentY
   );
-  currentY += 3.5;
+  currentY += 4.0;
 
   // Header Divider Line
   doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.35);
+  doc.setLineWidth(0.4);
   doc.line(marginLeft, currentY, marginLeft + contentWidth, currentY);
-  currentY += 4;
+  currentY += 4.5;
 
-  // --- 3. CERTIFICATION BOX (Green Institutional Box) ---
-  const certBoxHeight = 22;
+  // =========================================================================
+  // --- 4. CERTIFICATION BOX (Green Institutional Box) ---
+  // =========================================================================
+  const certBoxHeight = 26;
   doc.setFillColor(240, 253, 244); // light emerald-50
   doc.setDrawColor(167, 243, 208); // emerald-200
   doc.setLineWidth(0.4);
-  doc.roundedRect(marginLeft, currentY, contentWidth, certBoxHeight, 1.5, 1.5, 'FD');
+  doc.roundedRect(marginLeft, currentY, contentWidth, certBoxHeight, 2, 2, 'FD');
 
-  let boxY = currentY + 3.8;
+  let boxY = currentY + 4.5;
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(8);
+  doc.setFontSize(9.5);
   doc.setTextColor(6, 95, 70); // emerald-800
   doc.text('ATTESTAZIONE UFFICIALE DI NOTIFICA A MEZZO PEC', marginLeft + 4, boxY);
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(9);
   doc.setTextColor(16, 185, 129); // emerald-600
   doc.text(`PROTOCOLLO N. ${protocolloText}`, marginLeft + contentWidth - 4, boxY, { align: 'right' });
-  boxY += 3.8;
+  boxY += 4.6;
 
-  // Formal certification statement
+  // Formal certification statement with comfortable line spacing
   doc.setFont(PDF_FONT_FAMILY, 'normal');
-  doc.setFontSize(7);
+  doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
   const certStatementLines = doc.splitTextToSize(
     sanitizePdfText(`Si attesta formalmente che la presente comunicazione è stata inviata alla PEC ${COMMISSARIATO_INFO.pec} (${COMMISSARIATO_INFO.name}) nella data: ${sendDateText}, con Protocollo N. ${protocolloText}.`),
     contentWidth - 8
   );
   doc.text(certStatementLines, marginLeft + 4, boxY);
-  boxY += certStatementLines.length * 3.2 + 1.8;
+  boxY += certStatementLines.length * 4.0 + 2.0;
 
-  // Metadata row (Strictly without "(AAAAMMGGHHMMSS)")
+  // Metadata row (Strictly without obsolete "(AAAAMMGGHHMMSS)")
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(8.5);
   doc.setTextColor(71, 85, 105);
   doc.text('Data Invio:', marginLeft + 4, boxY);
 
   doc.setTextColor(180, 83, 9); // amber-700
-  doc.text(sendDateText, marginLeft + 20, boxY);
+  doc.text(sendDateText, marginLeft + 23, boxY);
 
   doc.setTextColor(71, 85, 105);
   doc.text('Numero Protocollo:', marginLeft + 75, boxY);
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.setTextColor(15, 23, 42);
-  doc.text(protocolloText, marginLeft + 103, boxY);
+  doc.text(protocolloText, marginLeft + 107, boxY);
 
-  currentY += certBoxHeight + 3.5;
+  currentY += certBoxHeight + 4.0;
 
-  // --- 4. MATCH DETAILS TABLE (2-column balanced grid) ---
+  // =========================================================================
+  // --- 5. MATCH DETAILS TABLE (2-column balanced grid) ---
+  // =========================================================================
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(8);
+  doc.setFontSize(9.5);
   doc.setTextColor(30, 41, 59);
   doc.text("SCHEDA DETTAGLI DELL'INCONTRO CASALINGO", marginLeft, currentY);
-  currentY += 2.8;
+  currentY += 3.5;
 
-  const halfWidth = (contentWidth - 4) / 2;
+  const halfWidth = (contentWidth - 6) / 2;
   const colLeft = marginLeft + 4;
-  const colRight = marginLeft + halfWidth + 4;
+  const colRight = marginLeft + halfWidth + 6;
 
-  const tableHeight = 24;
+  const tableHeight = 28;
   doc.setFillColor(248, 250, 252); // slate-50
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(marginLeft, currentY, contentWidth, tableHeight, 1.5, 1.5, 'FD');
+  doc.roundedRect(marginLeft, currentY, contentWidth, tableHeight, 2, 2, 'FD');
 
-  let tRowY = currentY + 3.5;
+  let tRowY = currentY + 4.2;
 
   // Row 1: Campionato & Data/Ora
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(6.5);
+  doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
   doc.text('CAMPIONATO:', colLeft, tRowY);
   doc.text('DATA E ORARIO INCONTRO:', colRight, tRowY);
-  tRowY += 2.8;
+  tRowY += 3.4;
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
   doc.text(sanitizePdfText(match.campionato), colLeft, tRowY);
 
-  doc.setTextColor(2, 132, 199);
+  doc.setTextColor(clubColor.r, clubColor.g, clubColor.b);
   doc.text(sanitizePdfText(`${matchDate} alle ore ${match.ora}`), colRight, tRowY);
-  tRowY += 4.5;
+  tRowY += 5.2;
 
   // Row 2: Girone/Giornata & Tipologia Gara
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(6.5);
+  doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
   doc.text('GIRONE / GIORNATA:', colLeft, tRowY);
   doc.text('TIPOLOGIA GARA:', colRight, tRowY);
-  tRowY += 2.8;
+  tRowY += 3.4;
 
   doc.setFont(PDF_FONT_FAMILY, 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
   doc.text(sanitizePdfText(`Girone ${match.girone} - Giornata ${match.giornata}`), colLeft, tRowY);
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.setTextColor(16, 185, 129);
   doc.text('GARA IN CASA (Obbligo Forza Pubblica Art. 62)', colRight, tRowY);
-  tRowY += 4.5;
+  tRowY += 5.2;
 
   // Row 3: Squadre
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(6.5);
+  doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
   doc.text('SQUADRA CASA (RICHIEDENTE):', colLeft, tRowY);
   doc.text('SQUADRA OSPITE:', colRight, tRowY);
-  tRowY += 2.8;
+  tRowY += 3.4;
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(7.5);
-  doc.setTextColor(2, 132, 199);
+  doc.setFontSize(8.5);
+  doc.setTextColor(clubColor.r, clubColor.g, clubColor.b);
   doc.text(sanitizePdfText(match.squadraCasa), colLeft, tRowY);
 
   doc.setTextColor(71, 85, 105);
   doc.text(sanitizePdfText(match.squadraOspite), colRight, tRowY);
 
-  currentY += tableHeight + 3.5;
+  currentY += tableHeight + 4.0;
 
-  // --- 5. FACILITY & CONTACTS BOX ---
+  // =========================================================================
+  // --- 6. FACILITY & CONTACTS BOX ---
+  // =========================================================================
   const facLines = doc.splitTextToSize(sanitizePdfText(pec.impianto), contentWidth - 8);
   const contactLines = doc.splitTextToSize(sanitizePdfText(pec.contatto), contentWidth - 8);
-  const facBoxHeight = 8 + facLines.length * 3.0 + contactLines.length * 3.0;
+  const facBoxHeight = 9 + facLines.length * 3.8 + contactLines.length * 3.8;
 
   doc.setFillColor(255, 255, 255);
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(marginLeft, currentY, contentWidth, facBoxHeight, 1.5, 1.5, 'FD');
+  doc.roundedRect(marginLeft, currentY, contentWidth, facBoxHeight, 2, 2, 'FD');
 
-  let facY = currentY + 3.2;
+  let facY = currentY + 4.0;
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(7);
+  doc.setFontSize(8);
   doc.setTextColor(180, 83, 9); // amber-700
   doc.text('IMPIANTO SPORTIVO DI DISPUTA:', marginLeft + 4, facY);
-  facY += 3.2;
+  facY += 4.0;
 
   doc.setFont(PDF_FONT_FAMILY, 'normal');
-  doc.setFontSize(7);
+  doc.setFontSize(8);
   doc.setTextColor(30, 41, 59);
   doc.text(facLines, marginLeft + 4, facY);
-  facY += facLines.length * 3.0 + 1.5;
+  facY += facLines.length * 3.8 + 2.0;
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(7);
+  doc.setFontSize(8);
   doc.setTextColor(71, 85, 105);
   doc.text(contactLines, marginLeft + 4, facY);
 
-  currentY += facBoxHeight + 3.5;
+  currentY += facBoxHeight + 4.0;
 
-  // --- 6. PEC MESSAGE BOX (Strictly single-page bounded) ---
+  // =========================================================================
+  // --- 7. PEC MESSAGE BOX (Strictly single-page bounded with dynamic line height) ---
+  // =========================================================================
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(8);
+  doc.setFontSize(9.5);
   doc.setTextColor(30, 41, 59);
   doc.text('TESTO INTEGRALE DELLA COMUNICAZIONE PEC TRASMESSA', marginLeft, currentY);
-  currentY += 2.8;
+  currentY += 3.5;
 
   const cleanSubject = sanitizePdfText(pec.oggetto);
   const cleanBody = sanitizePdfText(pec.testoCompleto);
 
-  // Footer start reference
-  const footerStartY = 266;
+  // Footer reference
+  const footerStartY = 265;
   const maxPecHeight = footerStartY - currentY - 3;
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(6.8);
+  doc.setFontSize(8);
   const subjectLines = doc.splitTextToSize(`OGGETTO: ${cleanSubject}`, contentWidth - 8);
 
   doc.setFont(PDF_FONT_FAMILY, 'normal');
-  doc.setFontSize(6.8);
+  doc.setFontSize(8);
   const bodyLines = doc.splitTextToSize(cleanBody, contentWidth - 8);
 
-  const subjectHeaderHeight = 6 + subjectLines.length * 2.8 + 2;
+  const subjectHeaderHeight = 5 + subjectLines.length * 3.6 + 2;
   const availableForBody = maxPecHeight - subjectHeaderHeight - 4;
-  const lineHeight = Math.min(2.8, Math.max(2.1, availableForBody / Math.max(1, bodyLines.length)));
+  // Calculate dynamic line height so body nicely fills out the remaining box height
+  const lineHeight = Math.min(3.8, Math.max(2.6, availableForBody / Math.max(1, bodyLines.length)));
   const pecBoxHeight = Math.min(maxPecHeight, subjectHeaderHeight + bodyLines.length * lineHeight + 4);
 
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.4);
-  doc.roundedRect(marginLeft, currentY, contentWidth, pecBoxHeight, 1.5, 1.5, 'FD');
+  doc.roundedRect(marginLeft, currentY, contentWidth, pecBoxHeight, 2, 2, 'FD');
 
-  let pY = currentY + 3.5;
+  let pY = currentY + 4.0;
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(6.8);
+  doc.setFontSize(8);
   doc.setTextColor(15, 23, 42);
   doc.text(subjectLines, marginLeft + 4, pY);
-  pY += subjectLines.length * 2.8 + 1.5;
+  pY += subjectLines.length * 3.6 + 2.0;
 
   doc.setDrawColor(226, 232, 240);
   doc.line(marginLeft + 4, pY, marginLeft + contentWidth - 4, pY);
-  pY += 2.5;
+  pY += 3.0;
 
   doc.setFont(PDF_FONT_FAMILY, 'normal');
-  doc.setFontSize(6.8);
+  doc.setFontSize(8);
   doc.setTextColor(51, 65, 85);
   doc.text(bodyLines, marginLeft + 4, pY, { lineHeightFactor: lineHeight / 2.8 });
 
-  // --- 7. INSTITUTIONAL SIGN-OFF ---
-  // Note: Obsolete "Timbro e Firma del Legale Rappresentante" has been completely removed as requested
+  // =========================================================================
+  // --- 8. INSTITUTIONAL SIGN-OFF ---
+  // =========================================================================
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(8.5);
   doc.setTextColor(71, 85, 105);
-  doc.text('Per la Società Richiedente:', marginLeft + contentWidth - 4, footerStartY - 2, { align: 'right' });
+  doc.text('Per la Società Richiedente:', marginLeft + contentWidth - 4, footerStartY - 1.5, { align: 'right' });
 
   doc.setFont(PDF_FONT_FAMILY, 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
-  doc.text(sanitizePdfText(`Il Presidente: ${club.president}`), marginLeft + contentWidth - 4, footerStartY + 1.8, { align: 'right' });
+  doc.text(sanitizePdfText(`Il Presidente: ${club.president}`), marginLeft + contentWidth - 4, footerStartY + 2.5, { align: 'right' });
 
-  // --- 8. IMPECCABLE BOTTOM AUDIT FOOTER (Piè di Pagina) ---
-  const footerLineY = footerStartY + 5;
+  // =========================================================================
+  // --- 9. IMPECCABLE BOTTOM AUDIT FOOTER (Piè di Pagina) ---
+  // =========================================================================
+  const footerLineY = footerStartY + 6.0;
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.35);
   doc.line(marginLeft, footerLineY, marginLeft + contentWidth, footerLineY);
 
   doc.setFont(PDF_FONT_FAMILY, 'normal');
-  doc.setFontSize(6.5);
+  doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
 
   const footerLine1 = sanitizePdfText(
     `Attestazione telematica ad uso prova di notifica PEC a ${COMMISSARIATO_INFO.pec} (${COMMISSARIATO_INFO.name})`
   );
-  doc.text(footerLine1, marginLeft + contentWidth / 2, footerLineY + 3.8, { align: 'center' });
+  doc.text(footerLine1, marginLeft + contentWidth / 2, footerLineY + 4.0, { align: 'center' });
 
+  const pageStr = totalPages && totalPages > 1
+    ? `Gara ${pageNumber} di ${totalPages}  |  Pagina ${pageNumber} di ${totalPages}`
+    : 'Pagina 1 di 1';
   const footerLine2 = sanitizePdfText(
-    `Protocollo N.: ${protocolloText}  |  Data/Ora Invio: ${sendDateText}  |  ID Gara: ${match.id}  |  Pagina 1 di 1`
+    `Protocollo N.: ${protocolloText}  |  Data/Ora Invio: ${sendDateText}  |  ID Gara: ${match.id}  |  ${pageStr}`
   );
-  doc.text(footerLine2, marginLeft + contentWidth / 2, footerLineY + 7.2, { align: 'center' });
+  doc.setFont(PDF_FONT_FAMILY, 'bold');
+  doc.text(footerLine2, marginLeft + contentWidth / 2, footerLineY + 8.0, { align: 'center' });
+}
+
+/**
+ * Generates an official, perfectly formatted PDF document certifying the transmission
+ * of the PEC to the Police Department for a single match (strictly 1 single A4 page).
+ */
+export function generateMatchPecPdf(match: Match, useDynamicAsdName: boolean = true): jsPDF {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+    compress: false,
+  });
+
+  renderMatchPecPage(doc, match, useDynamicAsdName, 1, 1);
+  return doc;
+}
+
+/**
+ * Generates a single concatenated PDF document containing all selected matches,
+ * each formatted on its own single A4 page, for easier continuous printing.
+ */
+export function generateConcatenatedPecPdf(
+  matches: Match[],
+  useDynamicAsdName: boolean = true
+): jsPDF {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+    compress: false,
+  });
+
+  matches.forEach((m, idx) => {
+    if (idx > 0) {
+      doc.addPage('a4', 'portrait');
+    }
+    renderMatchPecPage(doc, m, useDynamicAsdName, idx + 1, matches.length);
+  });
 
   return doc;
 }
 
 /**
- * Directly downloads the PDF receipt for a match
+ * Directly downloads the PDF receipt for a single match.
  */
 export function downloadMatchPecPdf(match: Match, useDynamicAsdName: boolean = true): void {
   const protocollo = match.protocollo && match.protocollo.trim() 
@@ -455,7 +533,33 @@ export function downloadMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
 }
 
 /**
- * Downloads a ZIP archive of all home match PDF certifications with sequential protocol advancement
+ * Directly downloads all matches concatenated into a single PDF document (1 match per page).
+ */
+export function downloadConcatenatedPecPdf(
+  matches: Match[],
+  useDynamicAsdName: boolean = true
+): void {
+  const homeMatches = matches.filter(m => m.isHome);
+  if (homeMatches.length === 0) return;
+
+  const now = new Date();
+  const nowStr = formatCurrentSendDate();
+
+  const preparedMatches: Match[] = homeMatches.map((m, idx) => ({
+    ...m,
+    status: 'inviata',
+    pecSentDate: m.pecSentDate || nowStr,
+    protocollo: m.protocollo || generateProtocolloNumber(now, idx),
+  }));
+
+  const doc = generateConcatenatedPecPdf(preparedMatches, useDynamicAsdName);
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const filename = `Attestazioni_PEC_Tutte_Le_Gare_${dateStr}_(${homeMatches.length}_gare).pdf`;
+  doc.save(filename);
+}
+
+/**
+ * Downloads a ZIP archive of all home match PDF certifications with sequential protocol advancement.
  */
 export async function downloadAllPdfsAsZip(matches: Match[], useDynamicAsdName: boolean = true): Promise<void> {
   const homeMatches = matches.filter(m => m.isHome);

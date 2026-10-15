@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import JSZip from 'jszip';
-import { X, Download, Archive, FileText, Table, Check, AlertCircle, FileCheck2 } from 'lucide-react';
+import { X, Download, Archive, FileText, Table, Check, AlertCircle, FileCheck2, Printer } from 'lucide-react';
 import { Match } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
 import { 
@@ -8,7 +8,7 @@ import {
   formatSeparatedFieldsTxt, 
   downloadTextFile 
 } from '../utils/pecGenerator';
-import { generateMatchPecPdf } from '../utils/pdfGenerator';
+import { generateMatchPecPdf, generateConcatenatedPecPdf } from '../utils/pdfGenerator';
 import { formatCurrentSendDate, generateProtocolloNumber } from '../utils/matchMerger';
 import { normalizeToGGMMMAAAA, formatDateToGGMMMAAAA } from '../utils/dateUtils';
 
@@ -179,6 +179,39 @@ Totale gare incluse: ${targetMatches.length}
     }
   };
 
+  // 3b. Export Single Concatenated PDF File (Each Match on its own A4 page)
+  const handleExportConcatenatedPdf = () => {
+    if (targetMatches.length === 0) return;
+    setIsExporting(true);
+
+    try {
+      const now = new Date();
+      const nowStr = formatCurrentSendDate();
+
+      const preparedMatches: Match[] = targetMatches.map((m, idx) => ({
+        ...m,
+        status: 'inviata',
+        pecSentDate: m.pecSentDate || nowStr,
+        protocollo: m.protocollo || generateProtocolloNumber(now, idx),
+      }));
+
+      const doc = generateConcatenatedPecPdf(preparedMatches, useDynamicAsdName);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = `Attestazioni_PEC_Tutte_Le_Gare_${dateStr}_(${targetMatches.length}_gare).pdf`;
+      doc.save(filename);
+
+      if (autoMarkSent) {
+        onMarkMatchesAsSent(targetMatches.map(m => m.id));
+      }
+      setExportSuccess(`File PDF unico generato con successo (${targetMatches.length} pagine A4, 1 per gara)!`);
+      setTimeout(() => setExportSuccess(null), 3000);
+    } catch (err: any) {
+      alert(`Errore nella generazione del PDF unico: ${err?.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // 4. Export CSV with Separated Fields as Columns
   const handleExportCsv = () => {
     if (targetMatches.length === 0) return;
@@ -256,7 +289,7 @@ Totale gare incluse: ${targetMatches.length}
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-2xl w-full my-8 shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+      <div className="bg-white rounded-2xl max-w-3xl w-full my-8 shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -276,20 +309,46 @@ Totale gare incluse: ${targetMatches.length}
         {/* Content */}
         <div className="p-6 space-y-5">
           <p className="text-xs text-slate-600 leading-relaxed">
-            Scegli il formato con cui salvare o attestare le richieste per il Commissariato. Ciascun documento include i campi separati obbligatori e l'attestazione ufficiale di trasmissione alla PEC <strong>{COMMISSARIATO_INFO.pec}</strong>.
+            Scegli il formato con cui salvare o attestare le richieste per il Commissariato. Ciascun documento include i campi separati obbligatori, caratteri ad alta leggibilità, filigrana ufficiale e l'attestazione formale di trasmissione alla PEC <strong>{COMMISSARIATO_INFO.pec}</strong>.
           </p>
 
-          {/* Export Formats Cards: 4 formats */}
+          {/* Export Formats Cards: 5 formats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* 1. File PDF Ufficiali (ZIP) */}
+            {/* 1. File PDF Unico (Concatenato - 1 pagina per gara) - FEATURED */}
+            <div className="p-4 rounded-xl border-2 border-indigo-200 bg-indigo-50/50 flex flex-col justify-between hover:border-indigo-300 transition-colors shadow-2xs">
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                    <Printer className="w-4 h-4" />
+                  </div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-indigo-200/80 text-indigo-800 px-2 py-0.5 rounded-full">
+                    Stampa Facile
+                  </span>
+                </div>
+                <h3 className="text-xs font-bold text-indigo-950">PDF Unico (Tutte le Gare)</h3>
+                <p className="text-[11px] text-indigo-900/80 mt-1">
+                  Un solo documento PDF con tutte le attestazioni: ciascuna gara ha la sua pagina A4 dedicata, pronto per la stampa immediata.
+                </p>
+              </div>
+              <button
+                onClick={handleExportConcatenatedPdf}
+                disabled={targetMatches.length === 0 || isExporting}
+                className="mt-4 w-full py-2 px-3 text-xs font-bold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>{isExporting ? 'Generazione in corso...' : `Scarica PDF Unico (${targetMatches.length} Pag.)`}</span>
+              </button>
+            </div>
+
+            {/* 2. File PDF Ufficiali (ZIP) */}
             <div className="p-4 rounded-xl border-2 border-red-200 bg-red-50/40 flex flex-col justify-between hover:border-red-300 transition-colors shadow-2xs">
               <div>
                 <div className="w-8 h-8 rounded-lg bg-red-100 text-red-700 flex items-center justify-center mb-2.5">
                   <FileCheck2 className="w-4 h-4" />
                 </div>
-                <h3 className="text-xs font-bold text-red-950">Attestazioni PDF (.ZIP)</h3>
+                <h3 className="text-xs font-bold text-red-950">Attestazioni PDF Singole (.ZIP)</h3>
                 <p className="text-[11px] text-red-900/80 mt-1">
-                  Genera i documenti PDF ufficiali con data di invio e attestazione di avvenuta trasmissione a {COMMISSARIATO_INFO.pec}.
+                  Genera un archivio .ZIP contenente ciascun file PDF separato per ogni gara casalinga con filigrana e protocollo.
                 </p>
               </div>
               <button
@@ -301,7 +360,7 @@ Totale gare incluse: ${targetMatches.length}
               </button>
             </div>
 
-            {/* 2. File TXT Unico */}
+            {/* 3. File TXT Unico */}
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col justify-between hover:border-slate-300 transition-colors">
               <div>
                 <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center mb-2.5">
@@ -321,7 +380,7 @@ Totale gare incluse: ${targetMatches.length}
               </button>
             </div>
 
-            {/* 3. Archivio ZIP dei singoli TXT */}
+            {/* 4. Archivio ZIP dei singoli TXT */}
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col justify-between hover:border-slate-300 transition-colors">
               <div>
                 <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center mb-2.5">
@@ -341,21 +400,23 @@ Totale gare incluse: ${targetMatches.length}
               </button>
             </div>
 
-            {/* 4. Tabella CSV */}
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col justify-between hover:border-slate-300 transition-colors">
-              <div>
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2.5">
+            {/* 5. Tabella CSV (Spans full width on sm screens if odd) */}
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col justify-between hover:border-slate-300 transition-colors sm:col-span-2">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                   <Table className="w-4 h-4" />
                 </div>
-                <h3 className="text-xs font-bold text-slate-900">Tabella CSV / Excel</h3>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Tabella con colonne separate per ciascun campo (Oggetto, Intestazione, Impianto, etc.).
-                </p>
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900">Tabella CSV / Excel</h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Tabella compatibile con Excel e Fogli Google con colonne separate per ciascun campo (Oggetto, Intestazione, Impianto, etc.).
+                  </p>
+                </div>
               </div>
               <button
                 onClick={handleExportCsv}
                 disabled={targetMatches.length === 0}
-                className="mt-4 w-full py-2 px-3 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 cursor-pointer"
+                className="mt-3 w-full py-2 px-3 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 cursor-pointer"
               >
                 Scarica File .CSV
               </button>
