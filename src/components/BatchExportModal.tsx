@@ -149,11 +149,16 @@ Totale gare incluse: ${targetMatches.length}
 
         const doc = generateMatchPecPdf(matchForPdf, useDynamicAsdName);
         const pdfArrayBuffer = doc.output('arraybuffer');
+        const safeCategory = (m.category || m.campionato || 'GARA')
+          .trim()
+          .replace(/[^a-zA-Z0-9]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '');
         const safeDate = m.data.replace(/[^0-9]/g, '-');
         const safeClub = m.clubId;
-        const safeHome = m.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_');
-        const safeAway = m.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_');
-        const filename = `Attestazione_PEC_${safeDate}_${safeClub}_${safeHome}_vs_${safeAway}.pdf`;
+        const safeHome = m.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
+        const safeAway = m.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
+        const filename = `Attestazione_PEC_${safeCategory}_${safeClub}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
         folder?.file(filename, pdfArrayBuffer);
       });
 

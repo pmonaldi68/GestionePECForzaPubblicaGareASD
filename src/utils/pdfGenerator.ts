@@ -145,28 +145,10 @@ export function renderMatchPecPage(
   const contentWidth = 180;
   const clubColor = hexToRgb(club.primaryColor || '#0284c7');
 
-  // =========================================================================
-  // --- 1. SUBTLE 'UFFICIALE' WATERMARK & INSTITUTIONAL BACKGROUND STAMP ---
-  // =========================================================================
-  doc.setTextColor(242, 245, 250); // very soft, unobtrusive slate/blue tint
-  doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(60);
-  doc.text('UFFICIALE', 105, 155, { align: 'center', angle: 28 });
-
-  // Subtle circular watermark seal
-  doc.setDrawColor(240, 244, 250);
-  doc.setLineWidth(0.6);
-  doc.circle(105, 155, 36);
-  doc.circle(105, 155, 33);
-  doc.setFontSize(7.5);
-  doc.setTextColor(235, 240, 248);
-  doc.text('ATTESTAZIONE UFFICIALE * NOTIFICA PEC ART. 62 NOIF', 105, 126, { align: 'center' });
-  doc.text('* COMMISSARIATO DI PUBBLICA SICUREZZA *', 105, 186, { align: 'center' });
-
   let currentY = 12;
 
   // =========================================================================
-  // --- 2. TOP COLORED ACCENT BAR ---
+  // --- 1. TOP COLORED ACCENT BAR ---
   // =========================================================================
   doc.setFillColor(clubColor.r, clubColor.g, clubColor.b);
   doc.rect(marginLeft, currentY, contentWidth, 2.5, 'F');
@@ -473,6 +455,42 @@ export function renderMatchPecPage(
   );
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.text(footerLine2, marginLeft + contentWidth / 2, footerLineY + 8.0, { align: 'center' });
+
+  // =========================================================================
+  // --- 10. OFFICIAL 'UFFICIALE' WATERMARK OVERLAY ---
+  // Rendered with semi-transparent alpha graphics state (GState opacity 0.085)
+  // across the finished page so that it is clearly and crisply visible over
+  // all sections without being covered by background card rectangles, while
+  // preserving 100% legibility of all black text.
+  // =========================================================================
+  try {
+    const hasGState = typeof (doc as any).GState === 'function';
+    if (hasGState) {
+      (doc as any).saveGraphicsState();
+      const gState = new (doc as any).GState({ opacity: 0.085 });
+      (doc as any).setGState(gState);
+
+      // Large diagonal watermark
+      doc.setFont(PDF_FONT_FAMILY, 'bold');
+      doc.setFontSize(54);
+      doc.setTextColor(30, 41, 59); // slate-800 with 0.085 opacity
+      doc.text('UFFICIALE', 105, 155, { align: 'center', angle: 28 });
+
+      // Institutional circular watermark seal
+      doc.setDrawColor(30, 41, 59);
+      doc.setLineWidth(0.7);
+      doc.circle(105, 155, 40);
+      doc.circle(105, 155, 37);
+
+      doc.setFontSize(7.5);
+      doc.text('ATTESTAZIONE UFFICIALE * NOTIFICA PEC ART. 62 NOIF', 105, 122, { align: 'center' });
+      doc.text('* COMMISSARIATO DI PUBBLICA SICUREZZA *', 105, 190, { align: 'center' });
+
+      (doc as any).restoreGraphicsState();
+    }
+  } catch (err) {
+    console.warn('Watermark rendering skipped:', err);
+  }
 }
 
 /**
@@ -517,6 +535,24 @@ export function generateConcatenatedPecPdf(
 }
 
 /**
+ * Standardized filename generation for an attestation PDF:
+ * - Excludes protocol number (per user request)
+ * - Includes category (cleaned, e.g. PROMOZIONE, UNDER_18_REGIONALE_FASCIA_B)
+ * - Includes match date, home team, and away team
+ */
+export function formatMatchPdfFilename(match: Match): string {
+  const safeCategory = (match.category || match.campionato || 'GARA')
+    .trim()
+    .replace(/[^a-zA-Z0-9]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+  const safeDate = match.data.replace(/[^0-9]/g, '-');
+  const safeHome = match.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
+  const safeAway = match.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
+  return `Attestazione_PEC_${safeCategory}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
+}
+
+/**
  * Directly downloads the PDF receipt for a single match.
  */
 export function downloadMatchPecPdf(match: Match, useDynamicAsdName: boolean = true): void {
@@ -525,10 +561,7 @@ export function downloadMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
     : generateProtocolloNumber();
   const matchWithProt = { ...match, protocollo };
   const doc = generateMatchPecPdf(matchWithProt, useDynamicAsdName);
-  const safeDate = match.data.replace(/[^0-9]/g, '-');
-  const safeHome = match.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_');
-  const safeAway = match.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_');
-  const filename = `Attestazione_PEC_Prot_${protocollo}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
+  const filename = formatMatchPdfFilename(matchWithProt);
   doc.save(filename);
 }
 
@@ -580,11 +613,16 @@ export async function downloadAllPdfsAsZip(matches: Match[], useDynamicAsdName: 
     };
     const doc = generateMatchPecPdf(matchForPdf, useDynamicAsdName);
     const pdfArrayBuffer = doc.output('arraybuffer');
+    const safeCategory = (m.category || m.campionato || 'GARA')
+      .trim()
+      .replace(/[^a-zA-Z0-9]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '');
     const safeDate = m.data.replace(/[^0-9]/g, '-');
     const safeClub = m.clubId;
-    const safeHome = m.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_');
-    const safeAway = m.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_');
-    const filename = `Attestazione_${String(idx + 1).padStart(2, '0')}_Prot_${protocollo}_${safeClub}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
+    const safeHome = m.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
+    const safeAway = m.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
+    const filename = `Attestazione_${String(idx + 1).padStart(2, '0')}_${safeCategory}_${safeClub}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
     folder?.file(filename, pdfArrayBuffer);
   });
 
