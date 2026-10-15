@@ -12,7 +12,7 @@ import { CalendarView } from './components/CalendarView';
 import { GoogleSheetSyncBar } from './components/GoogleSheetSyncBar';
 import { FacilityChangeModal } from './components/FacilityChangeModal';
 import { Calendar, AlertCircle, AlertTriangle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2 } from 'lucide-react';
-import { downloadAllDraftsAsZip } from './utils/pecGenerator';
+import { downloadAllDraftsAsZip, resolveMatchCategory } from './utils/pecGenerator';
 import { downloadAllPdfsAsZip } from './utils/pdfGenerator';
 import { getGoogleSheetsCsvUrl, parseRawText, DEFAULT_COLUMN_MAPPING } from './utils/sheetParser';
 import { formatDateToGGMMMAAAA, parseMatchDate, getMatchPriority } from './utils/dateUtils';
@@ -24,20 +24,26 @@ const STORAGE_SHEET_URL_KEY = 'asd_pec_google_sheet_url_v1';
 const STORAGE_LAST_SYNC_KEY = 'asd_pec_last_sync_v1';
 
 export default function App() {
-  // Load saved matches or fallback to samples, guaranteeing strictly unique IDs
+  // Load saved matches or fallback to samples, guaranteeing strictly unique IDs and resolved categories
   const [matches, setMatches] = useState<Match[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return ensureUniqueMatchIds(parsed);
+          return ensureUniqueMatchIds(parsed).map(m => ({
+            ...m,
+            category: resolveMatchCategory(m),
+          }));
         }
       }
     } catch {
       // Ignore
     }
-    return ensureUniqueMatchIds(SAMPLE_MATCHES);
+    return ensureUniqueMatchIds(SAMPLE_MATCHES).map(m => ({
+      ...m,
+      category: resolveMatchCategory(m),
+    }));
   });
 
   const [useDynamicAsdName, setUseDynamicAsdName] = useState<boolean>(() => {
@@ -396,9 +402,10 @@ export default function App() {
   };
 
   // Batch mark matches as sent with current send date and ordered advancing protocollo (AAAAMMGGHHMMSS)
-  const handleMarkMatchesAsSent = (ids: string[]) => {
+  const handleMarkMatchesAsSent = (ids: string[], sendDate?: string) => {
     const now = new Date();
-    const nowStr = formatCurrentSendDate();
+    const defaultNowStr = formatCurrentSendDate();
+    const dateToUse = sendDate?.trim() || defaultNowStr;
     let offsetSec = 0;
     setMatches(prev =>
       prev.map(m => {
@@ -406,7 +413,7 @@ export default function App() {
           return {
             ...m,
             status: 'inviata',
-            pecSentDate: m.pecSentDate || nowStr,
+            pecSentDate: dateToUse,
             protocollo: m.protocollo || generateProtocolloNumber(now, offsetSec++),
           };
         }

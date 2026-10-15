@@ -20,7 +20,13 @@ import {
 } from 'lucide-react';
 import { Match } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
-import { generatePecForMatch, formatSeparatedFieldsTxt, downloadTextFile, createMailtoLink } from '../utils/pecGenerator';
+import { 
+  generatePecForMatch, 
+  formatSeparatedFieldsTxt, 
+  downloadTextFile, 
+  createMailtoLink,
+  resolveMatchCategory 
+} from '../utils/pecGenerator';
 import { downloadMatchPecPdf } from '../utils/pdfGenerator';
 import { formatCurrentSendDate, generateProtocolloNumber } from '../utils/matchMerger';
 import { getMatchPriority } from '../utils/dateUtils';
@@ -60,10 +66,14 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
 
   const handleDownloadTxt = () => {
     const content = formatSeparatedFieldsTxt(match, pec);
+    const safeCategory = resolveMatchCategory(match)
+      .replace(/[^a-zA-Z0-9]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '') || 'GARA';
     const safeDate = match.data.replace(/[^0-9]/g, '-');
     const safeHome = match.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_');
     const safeAway = match.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_');
-    const filename = `PEC_ForzaPubblica_${safeDate}_${safeHome}_vs_${safeAway}.txt`;
+    const filename = `Attestazione_PEC_${safeCategory}_${safeDate}_${safeHome}_vs_${safeAway}.txt`;
     downloadTextFile(filename, content);
   };
 

@@ -1,10 +1,45 @@
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
+import QRCode from 'qrcode';
 import { Match, ClubId } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
-import { generatePecForMatch } from './pecGenerator';
+import { generatePecForMatch, resolveMatchCategory } from './pecGenerator';
 import { normalizeToGGMMMAAAA } from './dateUtils';
 import { formatCurrentSendDate, generateProtocolloNumber } from './matchMerger';
+
+/**
+ * Renders a crisp vector QR code onto jsPDF synchronously.
+ * Vector modules ensure maximum sharpness when printed or scanned by police on mobile devices.
+ */
+export function drawQrCode(
+  doc: jsPDF,
+  text: string,
+  x: number,
+  y: number,
+  size: number
+): void {
+  try {
+    const qr = QRCode.create(text, { errorCorrectionLevel: 'M' });
+    const moduleCount = qr.modules.size;
+    const cellSize = size / moduleCount;
+
+    // Draw white quiet zone / background
+    doc.setFillColor(255, 255, 255);
+    doc.rect(x, y, size, size, 'F');
+
+    // Draw dark modules (slate-900)
+    doc.setFillColor(15, 23, 42);
+    for (let r = 0; r < moduleCount; r++) {
+      for (let c = 0; c < moduleCount; c++) {
+        if (qr.modules.get(r, c)) {
+          doc.rect(x + c * cellSize, y + r * cellSize, cellSize, cellSize, 'F');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to draw QR code:', err);
+  }
+}
 
 // ==========================================
 // EXPLICIT DOCUMENT DIMENSIONS & MARGINS (A4)
@@ -213,52 +248,90 @@ export function renderMatchPecPage(
   currentY += 4.5;
 
   // =========================================================================
-  // --- 4. CERTIFICATION BOX (Green Institutional Box) ---
+  // --- 4. CERTIFICATION BOX WITH SECURITY QR CODE (Police Checks) ---
   // =========================================================================
-  const certBoxHeight = 26;
+  const certBoxHeight = 29;
   doc.setFillColor(240, 253, 244); // light emerald-50
   doc.setDrawColor(167, 243, 208); // emerald-200
   doc.setLineWidth(0.4);
   doc.roundedRect(marginLeft, currentY, contentWidth, certBoxHeight, 2, 2, 'FD');
 
-  let boxY = currentY + 4.5;
+  // --- OFFICIAL SECURITY QR CODE FOR POLICE CHECKS ---
+  const qrCardWidth = 24;
+  const qrCardHeight = 24;
+  const qrX = marginLeft + contentWidth - qrCardWidth - 2.5;
+  const qrY = currentY + 2.5;
+
+  // White background badge with rounded border for QR code
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(167, 243, 208);
+  doc.setLineWidth(0.35);
+  doc.roundedRect(qrX, qrY, qrCardWidth, qrCardHeight, 1.5, 1.5, 'FD');
+
+  const resolvedCategory = resolveMatchCategory(match);
+  // Structured QR payload with protocol number, match ID, and police check info
+  const qrPayload = [
+    'VERIFICA FORZA PUBBLICA - PEC ART. 62 NOIF',
+    `Protocollo: ${protocolloNumber}`,
+    `ID Gara: ${match.id}`,
+    `Gara: ${match.squadraCasa} vs ${match.squadraOspite}`,
+    `Data/Ora: ${matchDate} alle ${match.ora}`,
+    `Categoria: ${resolvedCategory}`,
+    `Destinatario PEC: ${COMMISSARIATO_INFO.pec}`,
+    `Data Invio: ${sendDateText}`
+  ].join('\n');
+
+  // Draw 19x19mm crisp vector QR code centered in card
+  drawQrCode(doc, qrPayload, qrX + 2.5, qrY + 1.6, 19);
+
+  // Micro label under QR code
+  doc.setFont(PDF_FONT_FAMILY, 'bold');
+  doc.setFontSize(4.8);
+  doc.setTextColor(5, 150, 105); // emerald-600
+  doc.text('SCAN CONTROLLO P.S.', qrX + qrCardWidth / 2, qrY + qrCardHeight - 0.8, { align: 'center' });
+
+  // --- CERTIFICATION TEXT (LEFT OF QR CODE) ---
+  const textWidthLeft = qrX - marginLeft - 6; // ~147mm
+  let boxY = currentY + 4.2;
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.setFontSize(9.5);
   doc.setTextColor(6, 95, 70); // emerald-800
   doc.text('ATTESTAZIONE UFFICIALE DI NOTIFICA A MEZZO PEC', marginLeft + 4, boxY);
 
-  doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(16, 185, 129); // emerald-600
-  doc.text(`PROTOCOLLO N. ${protocolloText}`, marginLeft + contentWidth - 4, boxY, { align: 'right' });
-  boxY += 4.6;
+  boxY += 4.5;
 
   // Formal certification statement with comfortable line spacing
   doc.setFont(PDF_FONT_FAMILY, 'normal');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.3);
   doc.setTextColor(15, 23, 42);
   const certStatementLines = doc.splitTextToSize(
     sanitizePdfText(`Si attesta formalmente che la presente comunicazione è stata inviata alla PEC ${COMMISSARIATO_INFO.pec} (${COMMISSARIATO_INFO.name}) nella data: ${sendDateText}, con Protocollo N. ${protocolloText}.`),
-    contentWidth - 8
+    textWidthLeft
   );
   doc.text(certStatementLines, marginLeft + 4, boxY);
-  boxY += certStatementLines.length * 4.0 + 2.0;
+  boxY += certStatementLines.length * 4.0 + 2.2;
 
-  // Metadata row (Strictly without obsolete "(AAAAMMGGHHMMSS)")
+  // Metadata row: Data Invio, Numero Protocollo, ID Gara
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setTextColor(71, 85, 105);
   doc.text('Data Invio:', marginLeft + 4, boxY);
 
   doc.setTextColor(180, 83, 9); // amber-700
-  doc.text(sendDateText, marginLeft + 23, boxY);
+  doc.text(sendDateText, marginLeft + 21, boxY);
 
   doc.setTextColor(71, 85, 105);
-  doc.text('Numero Protocollo:', marginLeft + 75, boxY);
+  doc.text('Protocollo:', marginLeft + 68, boxY);
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.setTextColor(15, 23, 42);
-  doc.text(protocolloText, marginLeft + 107, boxY);
+  doc.text(protocolloText, marginLeft + 85, boxY);
+
+  doc.setTextColor(71, 85, 105);
+  doc.text('ID Gara:', marginLeft + 120, boxY);
+  doc.setFont(PDF_FONT_FAMILY, 'bold');
+  doc.setTextColor(100, 116, 139);
+  doc.text(sanitizePdfText(match.id), marginLeft + 132, boxY);
 
   currentY += certBoxHeight + 4.0;
 
@@ -541,11 +614,11 @@ export function generateConcatenatedPecPdf(
  * - Includes match date, home team, and away team
  */
 export function formatMatchPdfFilename(match: Match): string {
-  const safeCategory = (match.category || match.campionato || 'GARA')
-    .trim()
+  const cat = resolveMatchCategory(match);
+  const safeCategory = cat
     .replace(/[^a-zA-Z0-9]/g, '_')
     .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
+    .replace(/^_|_$/g, '') || 'GARA';
   const safeDate = match.data.replace(/[^0-9]/g, '-');
   const safeHome = match.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
   const safeAway = match.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
@@ -613,16 +686,14 @@ export async function downloadAllPdfsAsZip(matches: Match[], useDynamicAsdName: 
     };
     const doc = generateMatchPecPdf(matchForPdf, useDynamicAsdName);
     const pdfArrayBuffer = doc.output('arraybuffer');
-    const safeCategory = (m.category || m.campionato || 'GARA')
-      .trim()
+    const safeCategory = resolveMatchCategory(m)
       .replace(/[^a-zA-Z0-9]/g, '_')
       .replace(/_+/g, '_')
-      .replace(/^_|_$/g, '');
+      .replace(/^_|_$/g, '') || 'GARA';
     const safeDate = m.data.replace(/[^0-9]/g, '-');
-    const safeClub = m.clubId;
     const safeHome = m.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
     const safeAway = m.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
-    const filename = `Attestazione_${String(idx + 1).padStart(2, '0')}_${safeCategory}_${safeClub}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
+    const filename = `Attestazione_${String(idx + 1).padStart(2, '0')}_${safeCategory}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
     folder?.file(filename, pdfArrayBuffer);
   });
 

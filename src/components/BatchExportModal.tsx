@@ -1,12 +1,26 @@
 import React, { useState } from 'react';
 import JSZip from 'jszip';
-import { X, Download, Archive, FileText, Table, Check, AlertCircle, FileCheck2, Printer } from 'lucide-react';
+import { 
+  X, 
+  Download, 
+  Archive, 
+  FileText, 
+  Table, 
+  Check, 
+  AlertCircle, 
+  FileCheck2, 
+  Printer, 
+  Zap, 
+  CheckCircle2, 
+  Calendar 
+} from 'lucide-react';
 import { Match } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
 import { 
   generatePecForMatch, 
   formatSeparatedFieldsTxt, 
-  downloadTextFile 
+  downloadTextFile,
+  resolveMatchCategory 
 } from '../utils/pecGenerator';
 import { generateMatchPecPdf, generateConcatenatedPecPdf } from '../utils/pdfGenerator';
 import { formatCurrentSendDate, generateProtocolloNumber } from '../utils/matchMerger';
@@ -16,7 +30,7 @@ interface BatchExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   matches: Match[];
-  onMarkMatchesAsSent: (matchIds: string[]) => void;
+  onMarkMatchesAsSent: (matchIds: string[], sendDate?: string) => void;
   useDynamicAsdName: boolean;
 }
 
@@ -31,6 +45,9 @@ export const BatchExportModal: React.FC<BatchExportModalProps> = ({
   const [autoMarkSent, setAutoMarkSent] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState<string | null>(null);
+  const [quickActionFeedback, setQuickActionFeedback] = useState<string | null>(null);
+  const [customQuickDate, setCustomQuickDate] = useState<string>('');
+  const [localMarkedIds, setLocalMarkedIds] = useState<Record<string, string>>({});
 
   if (!isOpen) return null;
 
@@ -48,6 +65,26 @@ export const BatchExportModal: React.FC<BatchExportModalProps> = ({
     } else {
       setSelectedIds(matches.map(m => m.id));
     }
+  };
+
+  // Quick Action: Mark all currently selected items as 'Inviata' with a single click
+  const handleQuickMarkAllSelectedAsSent = () => {
+    if (targetMatches.length === 0) return;
+    const nowStr = formatCurrentSendDate();
+    const dateToUse = customQuickDate.trim() || nowStr;
+    onMarkMatchesAsSent(selectedIds, dateToUse);
+
+    // Update local state map so labels immediately show "Inviata"
+    const updated: Record<string, string> = { ...localMarkedIds };
+    selectedIds.forEach(id => {
+      updated[id] = dateToUse;
+    });
+    setLocalMarkedIds(updated);
+
+    setQuickActionFeedback(
+      `Operazione completata! ${targetMatches.length} ${targetMatches.length === 1 ? 'gara contrassegnata' : 'gare contrassegnate'} come "INVIATA" (Data: ${dateToUse})!`
+    );
+    setTimeout(() => setQuickActionFeedback(null), 5000);
   };
 
   // 1. Export Unified TXT File
@@ -97,11 +134,14 @@ Totale gare incluse: ${targetMatches.length}
       targetMatches.forEach(m => {
         const pec = generatePecForMatch(m, useDynamicAsdName);
         const content = formatSeparatedFieldsTxt(m, pec);
+        const safeCategory = resolveMatchCategory(m)
+          .replace(/[^a-zA-Z0-9]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '') || 'GARA';
         const safeDate = m.data.replace(/[^0-9]/g, '-');
-        const safeClub = m.clubId;
         const safeHome = m.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_');
         const safeAway = m.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_');
-        const filename = `${safeDate}_${safeClub}_${safeHome}_vs_${safeAway}.txt`;
+        const filename = `PEC_${safeCategory}_${safeDate}_${safeHome}_vs_${safeAway}.txt`;
         folder?.file(filename, content);
       });
 
@@ -149,16 +189,14 @@ Totale gare incluse: ${targetMatches.length}
 
         const doc = generateMatchPecPdf(matchForPdf, useDynamicAsdName);
         const pdfArrayBuffer = doc.output('arraybuffer');
-        const safeCategory = (m.category || m.campionato || 'GARA')
-          .trim()
+        const safeCategory = resolveMatchCategory(m)
           .replace(/[^a-zA-Z0-9]/g, '_')
           .replace(/_+/g, '_')
-          .replace(/^_|_$/g, '');
+          .replace(/^_|_$/g, '') || 'GARA';
         const safeDate = m.data.replace(/[^0-9]/g, '-');
-        const safeClub = m.clubId;
         const safeHome = m.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
         const safeAway = m.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
-        const filename = `Attestazione_PEC_${safeCategory}_${safeClub}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
+        const filename = `Attestazione_PEC_${safeCategory}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
         folder?.file(filename, pdfArrayBuffer);
       });
 
@@ -314,8 +352,97 @@ Totale gare incluse: ${targetMatches.length}
         {/* Content */}
         <div className="p-6 space-y-5">
           <p className="text-xs text-slate-600 leading-relaxed">
-            Scegli il formato con cui salvare o attestare le richieste per il Commissariato. Ciascun documento include i campi separati obbligatori, caratteri ad alta leggibilità, filigrana ufficiale e l'attestazione formale di trasmissione alla PEC <strong>{COMMISSARIATO_INFO.pec}</strong>.
+            Scegli il formato con cui salvare o attestare le richieste per il Commissariato. Ciascun documento include i campi separati obbligatori, caratteri ad alta leggibilità, codice QR per controlli di polizia, filigrana ufficiale e l'attestazione formale di trasmissione alla PEC <strong>{COMMISSARIATO_INFO.pec}</strong>.
           </p>
+
+          {/* ========================================================= */}
+          {/* --- QUICK ACTIONS SECTION (1-Click Mark All As Sent) --- */}
+          {/* ========================================================= */}
+          <div className="rounded-xl border-2 border-emerald-300 bg-linear-to-r from-emerald-50 via-teal-50/70 to-emerald-50 p-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <Zap className="w-4 h-4 fill-white text-emerald-100" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                      Azioni Rapide · Quick Actions
+                    </h3>
+                    <span className="text-[10px] bg-emerald-200/90 text-emerald-800 font-semibold px-2 py-0.5 rounded-full">
+                      1-Click
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-900/80 mt-0.5">
+                    Contrassegna tutte le gare selezionate ({targetMatches.length} di {matches.length}) come <strong>"Inviata"</strong> con un solo clic, applicando la data odierna come data di invio predefinita e assegnando i numeri di protocollo.
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0 flex items-center">
+                <button
+                  type="button"
+                  onClick={handleQuickMarkAllSelectedAsSent}
+                  disabled={targetMatches.length === 0}
+                  className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer hover:shadow-md active:scale-98"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Segna Selezionate come Inviate ({targetMatches.length})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Actions Details & Controls */}
+            <div className="mt-3 pt-2.5 border-t border-emerald-200/70 flex flex-wrap items-center justify-between gap-2 text-[11px] text-emerald-800">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-emerald-950">Data Invio Predefinita:</span>
+                <span className="bg-white/90 border border-emerald-300 px-2 py-0.5 rounded-md font-bold text-emerald-900 flex items-center gap-1 shadow-2xs">
+                  <Calendar className="w-3 h-3 text-emerald-600" />
+                  {customQuickDate.trim() || `Oggi, ${formatCurrentSendDate()}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const custom = prompt(
+                      'Inserisci data e ora di invio PEC personalizzata (es. "15/10/2026 alle 10:30"):',
+                      customQuickDate || formatCurrentSendDate()
+                    );
+                    if (custom !== null) {
+                      setCustomQuickDate(custom);
+                    }
+                  }}
+                  className="text-[10px] text-emerald-700 underline hover:text-emerald-950 font-medium cursor-pointer ml-1"
+                >
+                  {customQuickDate ? 'Modifica data' : 'Personalizza data'}
+                </button>
+                {customQuickDate && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomQuickDate('')}
+                    className="text-[10px] text-slate-500 hover:text-slate-800 cursor-pointer"
+                  >
+                    (Ripristina odierna)
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] bg-white/80 border border-emerald-200 text-emerald-900 px-2 py-0.5 rounded-md font-medium">
+                  Da Inviare: <strong>{targetMatches.filter(m => m.status !== 'inviata' && !localMarkedIds[m.id]).length}</strong>
+                </span>
+                <span className="text-[10px] bg-white/80 border border-emerald-200 text-emerald-900 px-2 py-0.5 rounded-md font-medium">
+                  Già Inviate: <strong>{targetMatches.filter(m => m.status === 'inviata' || localMarkedIds[m.id]).length}</strong>
+                </span>
+              </div>
+            </div>
+
+            {quickActionFeedback && (
+              <div className="mt-2.5 p-2.5 rounded-lg bg-emerald-100/90 border border-emerald-300 text-xs text-emerald-900 font-semibold flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-700 shrink-0" />
+                <span>{quickActionFeedback}</span>
+              </div>
+            )}
+          </div>
 
           {/* Export Formats Cards: 5 formats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -459,12 +586,13 @@ Totale gare incluse: ${targetMatches.length}
                     />
                     <span className="font-semibold text-slate-800">{m.squadraCasa} vs {m.squadraOspite}</span>
                     <span className="text-slate-400">·</span>
-                    <span className="text-slate-500">{m.category}</span>
+                    <span className="text-slate-500 font-medium">{resolveMatchCategory(m)}</span>
                     <span className="text-slate-400">·</span>
                     <span className="text-slate-500">{m.data} {m.ora}</span>
-                    {m.status === 'inviata' && (
-                      <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1 rounded ml-auto">
-                        Inviata il {m.pecSentDate || 'Data reg.'}
+                    {(m.status === 'inviata' || localMarkedIds[m.id]) && (
+                      <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded ml-auto flex items-center gap-1 font-medium">
+                        <Check className="w-2.5 h-2.5 text-emerald-600" />
+                        Inviata il {localMarkedIds[m.id] || m.pecSentDate || 'Data reg.'}
                       </span>
                     )}
                   </label>

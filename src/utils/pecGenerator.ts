@@ -63,6 +63,32 @@ export function resolveFacilityText(clubId: ClubId, categoryOrCampionato: string
 }
 
 /**
+ * Robustly resolves the official match category, even if category field is empty,
+ * null, lowercase, or only present in 'campionato' or custom aliases.
+ */
+export function resolveMatchCategory(match: Partial<Match>): string {
+  if (match.category && match.category.trim()) {
+    return match.category.trim();
+  }
+  if ((match as any)?.categoria && typeof (match as any).categoria === 'string' && (match as any).categoria.trim()) {
+    return (match as any).categoria.trim();
+  }
+  const searchStr = `${match.campionato || ''} ${match.squadraCasa || ''} ${match.notes || ''}`;
+  const normSearch = normalize(searchStr);
+  for (const rule of CATEGORY_FACILITY_RULES) {
+    if (normSearch.includes(normalize(rule.category))) {
+      return rule.category;
+    }
+    for (const alias of rule.aliases) {
+      if (normSearch.includes(normalize(alias))) {
+        return rule.category;
+      }
+    }
+  }
+  return match.campionato?.trim() || 'GARA';
+}
+
+/**
  * Returns contact string for a club
  */
 export function getContactText(clubId: ClubId): string {
