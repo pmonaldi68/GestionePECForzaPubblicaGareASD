@@ -248,50 +248,15 @@ export function renderMatchPecPage(
   currentY += 4.5;
 
   // =========================================================================
-  // --- 4. CERTIFICATION BOX WITH SECURITY QR CODE (Police Checks) ---
+  // --- 4. CERTIFICATION BOX (Green Institutional Box) ---
   // =========================================================================
-  const certBoxHeight = 29;
+  const resolvedCategory = resolveMatchCategory(match);
+  const certBoxHeight = 25;
   doc.setFillColor(240, 253, 244); // light emerald-50
   doc.setDrawColor(167, 243, 208); // emerald-200
   doc.setLineWidth(0.4);
   doc.roundedRect(marginLeft, currentY, contentWidth, certBoxHeight, 2, 2, 'FD');
 
-  // --- OFFICIAL SECURITY QR CODE FOR POLICE CHECKS ---
-  const qrCardWidth = 24;
-  const qrCardHeight = 24;
-  const qrX = marginLeft + contentWidth - qrCardWidth - 2.5;
-  const qrY = currentY + 2.5;
-
-  // White background badge with rounded border for QR code
-  doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(167, 243, 208);
-  doc.setLineWidth(0.35);
-  doc.roundedRect(qrX, qrY, qrCardWidth, qrCardHeight, 1.5, 1.5, 'FD');
-
-  const resolvedCategory = resolveMatchCategory(match);
-  // Structured QR payload with protocol number, match ID, and police check info
-  const qrPayload = [
-    'VERIFICA FORZA PUBBLICA - PEC ART. 62 NOIF',
-    `Protocollo: ${protocolloNumber}`,
-    `ID Gara: ${match.id}`,
-    `Gara: ${match.squadraCasa} vs ${match.squadraOspite}`,
-    `Data/Ora: ${matchDate} alle ${match.ora}`,
-    `Categoria: ${resolvedCategory}`,
-    `Destinatario PEC: ${COMMISSARIATO_INFO.pec}`,
-    `Data Invio: ${sendDateText}`
-  ].join('\n');
-
-  // Draw 19x19mm crisp vector QR code centered in card
-  drawQrCode(doc, qrPayload, qrX + 2.5, qrY + 1.6, 19);
-
-  // Micro label under QR code
-  doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(4.8);
-  doc.setTextColor(5, 150, 105); // emerald-600
-  doc.text('SCAN CONTROLLO P.S.', qrX + qrCardWidth / 2, qrY + qrCardHeight - 0.8, { align: 'center' });
-
-  // --- CERTIFICATION TEXT (LEFT OF QR CODE) ---
-  const textWidthLeft = qrX - marginLeft - 6; // ~147mm
   let boxY = currentY + 4.2;
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.setFontSize(9.5);
@@ -300,38 +265,38 @@ export function renderMatchPecPage(
 
   boxY += 4.5;
 
-  // Formal certification statement with comfortable line spacing
+  // Formal certification statement across entire 172mm width
   doc.setFont(PDF_FONT_FAMILY, 'normal');
   doc.setFontSize(8.3);
   doc.setTextColor(15, 23, 42);
   const certStatementLines = doc.splitTextToSize(
-    sanitizePdfText(`Si attesta formalmente che la presente comunicazione è stata inviata alla PEC ${COMMISSARIATO_INFO.pec} (${COMMISSARIATO_INFO.name}) nella data: ${sendDateText}, con Protocollo N. ${protocolloText}.`),
-    textWidthLeft
+    sanitizePdfText(`Si attesta formalmente che la presente richiesta di Forza Pubblica (Art. 62 NOIF) per la gara di Categoria ${resolvedCategory} è stata regolarmente inviata alla PEC ${COMMISSARIATO_INFO.pec} (${COMMISSARIATO_INFO.name}) nella data: ${sendDateText}, con Protocollo N. ${protocolloText}.`),
+    contentWidth - 8
   );
   doc.text(certStatementLines, marginLeft + 4, boxY);
-  boxY += certStatementLines.length * 4.0 + 2.2;
+  boxY += certStatementLines.length * 4.0 + 2.0;
 
-  // Metadata row: Data Invio, Numero Protocollo, ID Gara
+  // Metadata row: Data Invio, Protocollo, Categoria, ID Gara
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(8);
+  doc.setFontSize(7.8);
   doc.setTextColor(71, 85, 105);
   doc.text('Data Invio:', marginLeft + 4, boxY);
 
   doc.setTextColor(180, 83, 9); // amber-700
-  doc.text(sendDateText, marginLeft + 21, boxY);
+  doc.text(sendDateText, marginLeft + 19, boxY);
 
   doc.setTextColor(71, 85, 105);
-  doc.text('Protocollo:', marginLeft + 68, boxY);
+  doc.text('Protocollo:', marginLeft + 62, boxY);
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.setTextColor(15, 23, 42);
-  doc.text(protocolloText, marginLeft + 85, boxY);
+  doc.text(protocolloText, marginLeft + 77, boxY);
 
   doc.setTextColor(71, 85, 105);
-  doc.text('ID Gara:', marginLeft + 120, boxY);
+  doc.text('Categoria:', marginLeft + 112, boxY);
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setTextColor(100, 116, 139);
-  doc.text(sanitizePdfText(match.id), marginLeft + 132, boxY);
+  doc.setTextColor(6, 95, 70);
+  doc.text(sanitizePdfText(resolvedCategory), marginLeft + 127, boxY);
 
   currentY += certBoxHeight + 4.0;
 
@@ -348,42 +313,43 @@ export function renderMatchPecPage(
   const colLeft = marginLeft + 4;
   const colRight = marginLeft + halfWidth + 6;
 
-  const tableHeight = 28;
+  const tableHeight = 29;
   doc.setFillColor(248, 250, 252); // slate-50
   doc.setDrawColor(226, 232, 240);
   doc.roundedRect(marginLeft, currentY, contentWidth, tableHeight, 2, 2, 'FD');
 
   let tRowY = currentY + 4.2;
 
-  // Row 1: Campionato & Data/Ora
+  // Row 1: CATEGORIA UFFICIALE & Data/Ora
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
-  doc.text('CAMPIONATO:', colLeft, tRowY);
+  doc.text('CATEGORIA UFFICIALE GARA:', colLeft, tRowY);
   doc.text('DATA E ORARIO INCONTRO:', colRight, tRowY);
   tRowY += 3.4;
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(clubColor.r, clubColor.g, clubColor.b);
+  doc.text(sanitizePdfText(resolvedCategory), colLeft, tRowY);
+
   doc.setFontSize(8.5);
   doc.setTextColor(15, 23, 42);
-  doc.text(sanitizePdfText(match.campionato), colLeft, tRowY);
-
-  doc.setTextColor(clubColor.r, clubColor.g, clubColor.b);
   doc.text(sanitizePdfText(`${matchDate} alle ore ${match.ora}`), colRight, tRowY);
   tRowY += 5.2;
 
-  // Row 2: Girone/Giornata & Tipologia Gara
+  // Row 2: Campionato/Girone/Giornata & Tipologia Gara
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
-  doc.text('GIRONE / GIORNATA:', colLeft, tRowY);
+  doc.text('CAMPIONATO / GIRONE / GIORNATA:', colLeft, tRowY);
   doc.text('TIPOLOGIA GARA:', colRight, tRowY);
   tRowY += 3.4;
 
   doc.setFont(PDF_FONT_FAMILY, 'normal');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8.2);
   doc.setTextColor(15, 23, 42);
-  doc.text(sanitizePdfText(`Girone ${match.girone} - Giornata ${match.giornata}`), colLeft, tRowY);
+  doc.text(sanitizePdfText(`${match.campionato} - Girone ${match.girone} (${match.giornata})`), colLeft, tRowY);
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.setTextColor(16, 185, 129);
@@ -451,8 +417,8 @@ export function renderMatchPecPage(
   const cleanSubject = sanitizePdfText(pec.oggetto);
   const cleanBody = sanitizePdfText(pec.testoCompleto);
 
-  // Footer reference
-  const footerStartY = 265;
+  // Footer reference (leaves bottom right free for QR code and left for audit footer)
+  const footerStartY = 256;
   const maxPecHeight = footerStartY - currentY - 3;
 
   doc.setFont(PDF_FONT_FAMILY, 'bold');
@@ -491,43 +457,89 @@ export function renderMatchPecPage(
   doc.text(bodyLines, marginLeft + 4, pY, { lineHeightFactor: lineHeight / 2.8 });
 
   // =========================================================================
-  // --- 8. INSTITUTIONAL SIGN-OFF ---
+  // --- 8. INSTITUTIONAL SIGN-OFF & BOTTOM AUDIT FOOTER ---
   // =========================================================================
+  const leftFooterWidth = contentWidth - 30; // 150 mm width on the left to leave room for QR code on bottom right
+
+  // President sign-off on the left
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setTextColor(71, 85, 105);
-  doc.text('Per la Società Richiedente:', marginLeft + contentWidth - 4, footerStartY - 1.5, { align: 'right' });
+  doc.text('Per la Società Richiedente:', marginLeft, footerStartY - 1.5);
 
   doc.setFont(PDF_FONT_FAMILY, 'normal');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setTextColor(15, 23, 42);
-  doc.text(sanitizePdfText(`Il Presidente: ${club.president}`), marginLeft + contentWidth - 4, footerStartY + 2.5, { align: 'right' });
+  doc.text(sanitizePdfText(`${club.name} - Il Presidente: ${club.president}`), marginLeft, footerStartY + 2.5);
 
-  // =========================================================================
-  // --- 9. IMPECCABLE BOTTOM AUDIT FOOTER (Piè di Pagina) ---
-  // =========================================================================
+  // Footer divider line (spans left 150mm)
   const footerLineY = footerStartY + 6.0;
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.35);
-  doc.line(marginLeft, footerLineY, marginLeft + contentWidth, footerLineY);
+  doc.line(marginLeft, footerLineY, marginLeft + leftFooterWidth, footerLineY);
 
+  // Footer audit text on left
   doc.setFont(PDF_FONT_FAMILY, 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7.2);
   doc.setTextColor(100, 116, 139);
 
   const footerLine1 = sanitizePdfText(
     `Attestazione telematica ad uso prova di notifica PEC a ${COMMISSARIATO_INFO.pec} (${COMMISSARIATO_INFO.name})`
   );
-  doc.text(footerLine1, marginLeft + contentWidth / 2, footerLineY + 4.0, { align: 'center' });
+  doc.text(footerLine1, marginLeft, footerLineY + 3.8);
 
   const pageStr = totalPages && totalPages > 1
     ? `Gara ${pageNumber} di ${totalPages}  |  Pagina ${pageNumber} di ${totalPages}`
     : 'Pagina 1 di 1';
   const footerLine2 = sanitizePdfText(
-    `Protocollo N.: ${protocolloText}  |  Data/Ora Invio: ${sendDateText}  |  ID Gara: ${match.id}  |  ${pageStr}`
+    `Protocollo N.: ${protocolloText}  |  Data/Ora Invio: ${sendDateText}`
   );
   doc.setFont(PDF_FONT_FAMILY, 'bold');
-  doc.text(footerLine2, marginLeft + contentWidth / 2, footerLineY + 8.0, { align: 'center' });
+  doc.text(footerLine2, marginLeft, footerLineY + 7.4);
+
+  const footerLine3 = sanitizePdfText(
+    `Categoria: ${resolvedCategory}  |  ID Gara: ${match.id}  |  ${pageStr}`
+  );
+  doc.setFont(PDF_FONT_FAMILY, 'normal');
+  doc.text(footerLine3, marginLeft, footerLineY + 11.0);
+
+  // =========================================================================
+  // --- 9. SECURITY QR CODE (In Basso a Destra nel Fondo Pagina Libero) ---
+  // =========================================================================
+  const qrCardWidth = 26;
+  const qrCardHeight = 31;
+  const qrCardX = marginLeft + contentWidth - qrCardWidth; // 15 + 180 - 26 = 169 mm
+  const qrCardY = footerStartY - 2.5; // 253.5 mm
+
+  // White card badge with subtle border
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(167, 243, 208); // emerald-200
+  doc.setLineWidth(0.4);
+  doc.roundedRect(qrCardX, qrCardY, qrCardWidth, qrCardHeight, 2, 2, 'FD');
+
+  // Structured QR payload with protocol number, match ID, category, and police check info
+  const qrPayload = [
+    'VERIFICA FORZA PUBBLICA - PEC ART. 62 NOIF',
+    `Protocollo: ${protocolloNumber}`,
+    `ID Gara: ${match.id}`,
+    `Categoria: ${resolvedCategory}`,
+    `Gara: ${match.squadraCasa} vs ${match.squadraOspite}`,
+    `Data/Ora: ${matchDate} alle ${match.ora}`,
+    `Destinatario PEC: ${COMMISSARIATO_INFO.pec}`,
+    `Data Invio: ${sendDateText}`
+  ].join('\n');
+
+  // Draw 21x21mm vector QR code centered in card badge
+  drawQrCode(doc, qrPayload, qrCardX + 2.5, qrCardY + 2.0, 21);
+
+  // Micro labels under QR code
+  doc.setFont(PDF_FONT_FAMILY, 'bold');
+  doc.setFontSize(5.0);
+  doc.setTextColor(5, 150, 105); // emerald-600
+  doc.text('VERIFICA P.S.', qrCardX + qrCardWidth / 2, qrCardY + 25.5, { align: 'center' });
+  doc.setFontSize(4.3);
+  doc.setTextColor(100, 116, 139);
+  doc.text('(SCAN CONTROLLO)', qrCardX + qrCardWidth / 2, qrCardY + 28.5, { align: 'center' });
 }
 
 /**
@@ -624,7 +636,11 @@ export function downloadConcatenatedPecPdf(
 
   const doc = generateConcatenatedPecPdf(preparedMatches, useDynamicAsdName);
   const dateStr = new Date().toISOString().slice(0, 10);
-  const filename = `Attestazioni_PEC_Tutte_Le_Gare_${dateStr}_(${homeMatches.length}_gare).pdf`;
+  const categories = Array.from(new Set(homeMatches.map(m => resolveMatchCategory(m))));
+  const catPrefix = categories.length === 1 
+    ? `${categories[0].replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')}_` 
+    : '';
+  const filename = `Attestazioni_PEC_${catPrefix}Tutte_Le_Gare_${dateStr}_(${homeMatches.length}_gare).pdf`;
   doc.save(filename);
 }
 
@@ -657,7 +673,7 @@ export async function downloadAllPdfsAsZip(matches: Match[], useDynamicAsdName: 
     const safeDate = m.data.replace(/[^0-9]/g, '-');
     const safeHome = m.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
     const safeAway = m.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
-    const filename = `Attestazione_${String(idx + 1).padStart(2, '0')}_${safeCategory}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
+    const filename = `Attestazione_PEC_${safeCategory}_${safeDate}_${safeHome}_vs_${safeAway}.pdf`;
     folder?.file(filename, pdfArrayBuffer);
   });
 

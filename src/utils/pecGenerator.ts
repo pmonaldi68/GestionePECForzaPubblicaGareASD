@@ -64,28 +64,66 @@ export function resolveFacilityText(clubId: ClubId, categoryOrCampionato: string
 
 /**
  * Robustly resolves the official match category, even if category field is empty,
- * null, lowercase, or only present in 'campionato' or custom aliases.
+ * null, lowercase, generic (e.g. 'CAMPIONATO REGIONALE'), or only present in 'campionato' or team name.
  */
 export function resolveMatchCategory(match: Partial<Match>): string {
-  if (match.category && match.category.trim()) {
-    return match.category.trim();
-  }
-  if ((match as any)?.categoria && typeof (match as any).categoria === 'string' && (match as any).categoria.trim()) {
-    return (match as any).categoria.trim();
-  }
-  const searchStr = `${match.campionato || ''} ${match.squadraCasa || ''} ${match.notes || ''}`;
+  const rawCat = (match.category || (match as any)?.categoria || '').trim();
+  const rawCamp = (match.campionato || '').trim();
+  const searchStr = `${rawCat} ${rawCamp} ${match.squadraCasa || ''} ${match.squadraOspite || ''} ${match.notes || ''}`;
   const normSearch = normalize(searchStr);
-  for (const rule of CATEGORY_FACILITY_RULES) {
-    if (normSearch.includes(normalize(rule.category))) {
-      return rule.category;
-    }
-    for (const alias of rule.aliases) {
-      if (normSearch.includes(normalize(alias))) {
-        return rule.category;
+
+  // 1. Check CLUB-specific rules first if clubId is known
+  if (match.clubId) {
+    const clubRules = CATEGORY_FACILITY_RULES.filter(r => r.clubId === match.clubId);
+    for (const rule of clubRules) {
+      if (normSearch.includes(normalize(rule.category))) return rule.category;
+      for (const alias of rule.aliases) {
+        if (normSearch.includes(normalize(alias))) return rule.category;
       }
     }
   }
-  return match.campionato?.trim() || 'GARA';
+
+  // 2. Check all CATEGORY_FACILITY_RULES
+  for (const rule of CATEGORY_FACILITY_RULES) {
+    if (normSearch.includes(normalize(rule.category))) return rule.category;
+    for (const alias of rule.aliases) {
+      if (normSearch.includes(normalize(alias))) return rule.category;
+    }
+  }
+
+  // 3. Regex checks for standard categories
+  const uMatch = searchStr.match(/UNDER\s*(\d+)(?:\s*(REGIONALE|REGIONALI|PROVINCIALE|PROVINCIALI|FASCIA\s*[AB]|B))?/i);
+  if (uMatch) {
+    const age = uMatch[1];
+    const level = uMatch[2] ? ` ${uMatch[2].toUpperCase()}` : '';
+    return `UNDER ${age}${level}`;
+  }
+
+  const uShort = searchStr.match(/\bU(\d+)\b/i);
+  if (uShort) {
+    return `UNDER ${uShort[1]}`;
+  }
+
+  if (/PROMOZIONE/i.test(searchStr)) return 'PROMOZIONE';
+  if (/ECCELLENZA/i.test(searchStr)) return 'ECCELLENZA';
+  if (/(?:3\^?|3°|TERZA)\s*CATEGORIA/i.test(searchStr) || /\b3CATEGORIA\b/i.test(searchStr)) return '3CATEGORIA';
+  if (/(?:2\^?|2°|SECONDA)\s*CATEGORIA/i.test(searchStr) || /\b2CATEGORIA\b/i.test(searchStr)) return '2CATEGORIA';
+  if (/(?:1\^?|1°|PRIMA)\s*CATEGORIA/i.test(searchStr) || /\b1CATEGORIA\b/i.test(searchStr)) return '1CATEGORIA';
+  if (/SERIE\s*C2/i.test(searchStr)) return 'SERIE C2';
+  if (/SERIE\s*D/i.test(searchStr)) return 'SERIE D';
+  if (/JUNIORES/i.test(searchStr)) return 'JUNIORES';
+
+  // 4. If rawCat has a value and is not generic
+  const genericWords = ['CAMPIONATO', 'CAMPIONATO REGIONALE', 'CAMPIONATO PROVINCIALE', 'GARA', 'PARTITA'];
+  if (rawCat && !genericWords.includes(rawCat.toUpperCase())) {
+    return rawCat.toUpperCase();
+  }
+
+  if (rawCamp && !genericWords.includes(rawCamp.toUpperCase())) {
+    return rawCamp.toUpperCase();
+  }
+
+  return rawCat || rawCamp || 'GARA';
 }
 
 /**
@@ -240,10 +278,14 @@ export async function downloadAllDraftsAsZip(matches: Match[], useDynamicAsdName
   homeMatches.forEach((match, idx) => {
     const pec = generatePecForMatch(match, useDynamicAsdName);
     const content = formatSeparatedFieldsTxt(match, pec);
+    const safeCategory = resolveMatchCategory(match)
+      .replace(/[^a-zA-Z0-9]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '') || 'GARA';
     const safeDate = match.data.replace(/[^0-9]/g, '-');
     const safeHome = match.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_');
     const safeAway = match.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_');
-    const filename = `Bozza_${String(idx + 1).padStart(2, '0')}_${match.clubId}_${safeDate}_${safeHome}_vs_${safeAway}.txt`;
+    const filename = `Bozza_${String(idx + 1).padStart(2, '0')}_${safeCategory}_${safeDate}_${safeHome}_vs_${safeAway}.txt`;
     folder?.file(filename, content);
   });
 

@@ -2,7 +2,7 @@ import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { Match, ClubId, ColumnMapping } from '../types';
 import { CLUBS, CATEGORY_FACILITY_RULES } from '../config/clubsData';
-import { resolveFacilityText } from './pecGenerator';
+import { resolveFacilityText, resolveMatchCategory } from './pecGenerator';
 import { normalizeToGGMMMAAAA } from './dateUtils';
 import { ensureUniqueMatchIds } from './matchMerger';
 
@@ -238,7 +238,13 @@ export function parseGridToMatches(grid: string[][], mapping: ColumnMapping = DE
     const categoriaVal = activeMapping.categoriaCol !== undefined ? (row[activeMapping.categoriaCol] || '').trim() : '';
 
     const clubId = detectClub(squadraCasa, squadraOspite, campionato || categoriaVal, societaVal);
-    const category = categoriaVal || campionato;
+    const category = resolveMatchCategory({
+      category: categoriaVal,
+      campionato,
+      squadraCasa,
+      squadraOspite,
+      clubId,
+    });
     const isHome = isHomeMatch(clubId, squadraCasa, squadraOspite);
     const facilityText = resolveFacilityText(clubId, category || campionato);
 

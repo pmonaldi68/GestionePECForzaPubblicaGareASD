@@ -240,7 +240,11 @@ Totale gare incluse: ${targetMatches.length}
 
       const doc = generateConcatenatedPecPdf(preparedMatches, useDynamicAsdName);
       const dateStr = new Date().toISOString().slice(0, 10);
-      const filename = `Attestazioni_PEC_Tutte_Le_Gare_${dateStr}_(${targetMatches.length}_gare).pdf`;
+      const categories = Array.from(new Set(targetMatches.map(m => resolveMatchCategory(m))));
+      const catPrefix = categories.length === 1 
+        ? `${categories[0].replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')}_` 
+        : '';
+      const filename = `Attestazioni_PEC_${catPrefix}Tutte_Le_Gare_${dateStr}_(${targetMatches.length}_gare).pdf`;
       doc.save(filename);
 
       if (autoMarkSent) {
