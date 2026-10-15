@@ -352,7 +352,7 @@ Totale gare incluse: ${targetMatches.length}
         {/* Content */}
         <div className="p-6 space-y-5">
           <p className="text-xs text-slate-600 leading-relaxed">
-            Scegli il formato con cui salvare o attestare le richieste per il Commissariato. Ciascun documento include i campi separati obbligatori, caratteri ad alta leggibilità, codice QR per controlli di polizia, filigrana ufficiale e l'attestazione formale di trasmissione alla PEC <strong>{COMMISSARIATO_INFO.pec}</strong>.
+            Scegli il formato con cui salvare o attestare le richieste per il Commissariato. Ciascun documento include i campi separati obbligatori, caratteri ad alta leggibilità, codice QR per controlli di polizia e l'attestazione formale di trasmissione alla PEC <strong>{COMMISSARIATO_INFO.pec}</strong>.
           </p>
 
           {/* ========================================================= */}
@@ -480,7 +480,7 @@ Totale gare incluse: ${targetMatches.length}
                 </div>
                 <h3 className="text-xs font-bold text-red-950">Attestazioni PDF Singole (.ZIP)</h3>
                 <p className="text-[11px] text-red-900/80 mt-1">
-                  Genera un archivio .ZIP contenente ciascun file PDF separato per ogni gara casalinga con filigrana e protocollo.
+                  Genera un archivio .ZIP contenente ciascun file PDF separato per ogni gara casalinga con codice QR di verifica e protocollo.
                 </p>
               </div>
               <button

@@ -147,7 +147,7 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
  * Guarantees:
  * - Strictly 1 single A4 page (210 x 297 mm) with zero spillover or pagination bugs
  * - Larger, highly legible typography with generous line-height across the entire document
- * - Subtle institutional 'Ufficiale' watermark and official circular stamp in the background
+ * - Security QR Code with match ID and protocol number for instant police verification
  * - Full Italian character encoding support with Helvetica standard PostScript font
  * - Clean display of Protocollo number without obsolete "(AAAAMMGGHHMMSS)" placeholder
  * - Complete removal of obsolete "Timbro e Firma del Legale Rappresentante"
@@ -528,42 +528,6 @@ export function renderMatchPecPage(
   );
   doc.setFont(PDF_FONT_FAMILY, 'bold');
   doc.text(footerLine2, marginLeft + contentWidth / 2, footerLineY + 8.0, { align: 'center' });
-
-  // =========================================================================
-  // --- 10. OFFICIAL 'UFFICIALE' WATERMARK OVERLAY ---
-  // Rendered with semi-transparent alpha graphics state (GState opacity 0.085)
-  // across the finished page so that it is clearly and crisply visible over
-  // all sections without being covered by background card rectangles, while
-  // preserving 100% legibility of all black text.
-  // =========================================================================
-  try {
-    const hasGState = typeof (doc as any).GState === 'function';
-    if (hasGState) {
-      (doc as any).saveGraphicsState();
-      const gState = new (doc as any).GState({ opacity: 0.085 });
-      (doc as any).setGState(gState);
-
-      // Large diagonal watermark
-      doc.setFont(PDF_FONT_FAMILY, 'bold');
-      doc.setFontSize(54);
-      doc.setTextColor(30, 41, 59); // slate-800 with 0.085 opacity
-      doc.text('UFFICIALE', 105, 155, { align: 'center', angle: 28 });
-
-      // Institutional circular watermark seal
-      doc.setDrawColor(30, 41, 59);
-      doc.setLineWidth(0.7);
-      doc.circle(105, 155, 40);
-      doc.circle(105, 155, 37);
-
-      doc.setFontSize(7.5);
-      doc.text('ATTESTAZIONE UFFICIALE * NOTIFICA PEC ART. 62 NOIF', 105, 122, { align: 'center' });
-      doc.text('* COMMISSARIATO DI PUBBLICA SICUREZZA *', 105, 190, { align: 'center' });
-
-      (doc as any).restoreGraphicsState();
-    }
-  } catch (err) {
-    console.warn('Watermark rendering skipped:', err);
-  }
 }
 
 /**
