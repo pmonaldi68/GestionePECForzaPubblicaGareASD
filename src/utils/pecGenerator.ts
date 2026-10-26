@@ -162,7 +162,7 @@ export function generatePecForMatch(match: Match, useDynamicAsdName: boolean = t
   const intestazione = `CON LA PRESENTE, L’ASSOCIAZIONE SPORTIVA DILETTANTISTICA ${asdName} RICHIEDE LA FORZA PUBBLICA, COME DA DISPOSIZIONI IMPARTITE DALLE REGOLE FEDERALI, INERENTI AL MANTENIMENTO DELL’ORDINE PUBBLICO NEI CAMPI SPORTIVI DI CALCIO, DI CUI ALL’ARTICOLO 62/4 E 5 DELLE N.O.I.F. PER LA SEGUENTE GARA:`;
 
   // CORPO MAIL
-  const corpo = `CAMPIONATO; - ${match.campionato.trim()}
+  const corpo = `CAMPIONATO: ${match.campionato.trim()}
 GIRONE: ${match.girone.trim()}
 GIORNATA: ${match.giornata.trim()}
 DATA:  ${dataGGMM}  ORE ${match.ora.trim()},

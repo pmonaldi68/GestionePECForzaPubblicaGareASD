@@ -8,6 +8,8 @@ import { PecPreviewModal } from './components/PecPreviewModal';
 import { ImportModal } from './components/ImportModal';
 import { BatchExportModal } from './components/BatchExportModal';
 import { SettingsModal } from './components/SettingsModal';
+import { ExportExcelModal } from './components/ExportExcelModal';
+import { BackupRestoreModal } from './components/BackupRestoreModal';
 import { CalendarView } from './components/CalendarView';
 import { GoogleSheetSyncBar } from './components/GoogleSheetSyncBar';
 import { FacilityChangeModal } from './components/FacilityChangeModal';
@@ -99,6 +101,8 @@ export default function App() {
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [isBatchExportOpen, setIsBatchExportOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isExportExcelOpen, setIsExportExcelOpen] = useState<boolean>(false);
+  const [isBackupRestoreOpen, setIsBackupRestoreOpen] = useState<boolean>(false);
 
   // Auto-sync function: updates matches from Google Sheet link preserving sent status and dates
   const fetchAndSyncFromSheet = async (url: string) => {
@@ -453,6 +457,49 @@ export default function App() {
     setSelectedMatchIds([]);
   };
 
+  // Full Archive Restore Handler
+  const handleRestoreArchive = (
+    newMatches: Match[],
+    newSettings?: { useDynamicAsdName: boolean; sheetUrl: string; lastSyncTime: string | null },
+    restoreSettings: boolean = true
+  ) => {
+    const cleanMatches = ensureUniqueMatchIds(newMatches).map(m => ({
+      ...m,
+      category: resolveMatchCategory(m),
+    }));
+    setMatches(cleanMatches);
+    setSelectedMatchIds([]);
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanMatches));
+    } catch {}
+
+    if (restoreSettings && newSettings) {
+      if (newSettings.useDynamicAsdName !== undefined) {
+        setUseDynamicAsdName(newSettings.useDynamicAsdName);
+        try {
+          localStorage.setItem(DYNAMIC_ASD_KEY, JSON.stringify(newSettings.useDynamicAsdName));
+        } catch {}
+      }
+      if (newSettings.sheetUrl !== undefined) {
+        setSheetUrl(newSettings.sheetUrl);
+        try {
+          localStorage.setItem(STORAGE_SHEET_URL_KEY, newSettings.sheetUrl);
+        } catch {}
+      }
+      if (newSettings.lastSyncTime !== undefined) {
+        setLastSyncTime(newSettings.lastSyncTime);
+        try {
+          if (newSettings.lastSyncTime) {
+            localStorage.setItem(STORAGE_LAST_SYNC_KEY, newSettings.lastSyncTime);
+          } else {
+            localStorage.removeItem(STORAGE_LAST_SYNC_KEY);
+          }
+        } catch {}
+      }
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-100/70 text-slate-900 font-sans flex flex-col">
       {/* Header */}
@@ -461,6 +508,8 @@ export default function App() {
         onOpenImport={() => setIsImportModalOpen(true)}
         onOpenBatchExport={() => setIsBatchExportOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenExportExcel={() => setIsExportExcelOpen(true)}
+        onOpenBackupRestore={() => setIsBackupRestoreOpen(true)}
         onLoadSampleData={handleLoadSampleData}
         onDownloadAllZip={() => downloadAllDraftsAsZip(matches, useDynamicAsdName)}
         onDownloadAllPdfsZip={() => downloadAllPdfsAsZip(matches, useDynamicAsdName)}
@@ -499,6 +548,7 @@ export default function App() {
         onToggleViewMode={setViewMode}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
+        onOpenExportExcel={() => setIsExportExcelOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -682,6 +732,29 @@ export default function App() {
         onClose={() => setIsSettingsOpen(false)}
         useDynamicAsdName={useDynamicAsdName}
         onToggleDynamicAsdName={setUseDynamicAsdName}
+      />
+
+      <ExportExcelModal
+        isOpen={isExportExcelOpen}
+        onClose={() => setIsExportExcelOpen(false)}
+        filteredMatches={filteredMatches}
+        totalMatchesCount={matches.length}
+        selectedClub={selectedClub}
+        onlyHomeMatches={onlyHomeMatches}
+        statusFilter={statusFilter}
+        selectedCategory={selectedCategory}
+        dateRange={dateRange}
+        useDynamicAsdName={useDynamicAsdName}
+      />
+
+      <BackupRestoreModal
+        isOpen={isBackupRestoreOpen}
+        onClose={() => setIsBackupRestoreOpen(false)}
+        matches={matches}
+        useDynamicAsdName={useDynamicAsdName}
+        sheetUrl={sheetUrl}
+        lastSyncTime={lastSyncTime}
+        onRestoreArchive={handleRestoreArchive}
       />
     </div>
   );

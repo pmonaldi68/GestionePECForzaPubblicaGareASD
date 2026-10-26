@@ -12,7 +12,8 @@ import {
   CalendarRange, 
   EyeOff, 
   CheckCircle2, 
-  AlertCircle 
+  AlertCircle,
+  FileSpreadsheet
 } from 'lucide-react';
 import { ClubId, DateRangeFilter, DateRangePreset } from '../types';
 import { CLUBS } from '../config/clubsData';
@@ -38,6 +39,7 @@ interface FiltersBarProps {
   onToggleViewMode: (mode: 'list' | 'calendar') => void;
   dateRange: DateRangeFilter;
   onDateRangeChange: (val: DateRangeFilter) => void;
+  onOpenExportExcel?: () => void;
 }
 
 export const FiltersBar: React.FC<FiltersBarProps> = ({
@@ -61,6 +63,7 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
   onToggleViewMode,
   dateRange,
   onDateRangeChange,
+  onOpenExportExcel,
 }) => {
   const [showCustomDateInputs, setShowCustomDateInputs] = useState(dateRange.preset === 'CUSTOM');
 
@@ -299,21 +302,34 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
             </div>
 
             {totalFilteredCount > 0 && (
-              <button
-                onClick={onToggleSelectAll}
-                className="inline-flex items-center gap-1.5 font-medium text-slate-700 hover:text-slate-900 transition-colors"
-              >
-                {isAllSelected ? (
-                  <CheckSquare className="w-4 h-4 text-blue-600" />
-                ) : (
-                  <Square className="w-4 h-4 text-slate-400" />
+              <div className="flex items-center gap-2">
+                {onOpenExportExcel && (
+                  <button
+                    onClick={onOpenExportExcel}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition-colors cursor-pointer"
+                    title="Esporta tutte le gare attualmente filtrate in formato Excel (.xlsx) o CSV"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>Esporta Excel (CSV)</span>
+                  </button>
                 )}
-                <span>
-                  {selectedMatchIds.length > 0
-                    ? `Selezionate (${selectedMatchIds.length})`
-                    : 'Seleziona tutte'}
-                </span>
-              </button>
+
+                <button
+                  onClick={onToggleSelectAll}
+                  className="inline-flex items-center gap-1.5 font-medium text-slate-700 hover:text-slate-900 transition-colors cursor-pointer text-xs"
+                >
+                  {isAllSelected ? (
+                    <CheckSquare className="w-4 h-4 text-blue-600" />
+                  ) : (
+                    <Square className="w-4 h-4 text-slate-400" />
+                  )}
+                  <span>
+                    {selectedMatchIds.length > 0
+                      ? `Selezionate (${selectedMatchIds.length})`
+                      : 'Seleziona tutte'}
+                  </span>
+                </button>
+              </div>
             )}
           </div>
         </div>

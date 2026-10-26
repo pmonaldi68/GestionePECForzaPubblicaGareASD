@@ -12,10 +12,12 @@ import {
   Printer, 
   Zap, 
   CheckCircle2, 
-  Calendar 
+  Calendar,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Match } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
+import { exportMatchesToXlsx, exportMatchesToCsv } from '../utils/excelExport';
 import { 
   generatePecForMatch, 
   formatSeparatedFieldsTxt, 
@@ -259,79 +261,42 @@ Totale gare incluse: ${targetMatches.length}
     }
   };
 
-  // 4. Export CSV with Separated Fields as Columns
+  // 4. Export CSV with Separated Fields as Columns (includes PEC status, date & protocol)
   const handleExportCsv = () => {
     if (targetMatches.length === 0) return;
 
-    const headers = [
-      'Societa',
-      'Categoria',
-      'Campionato',
-      'Girone',
-      'Giornata',
-      'Data',
-      'Ora',
-      'Squadra_Casa',
-      'Squadra_Ospite',
-      'Stato_PEC',
-      'Data_Invio_PEC',
-      'Destinatario_PEC',
-      'OGGETTO_MAIL',
-      'INTESTAZIONE_MAIL',
-      'CORPO_MAIL',
-      'IMPIANTO_SPORTIVO',
-      'CONTATTO_REFERENTE',
-      'CHIUSURA_E_FIRMA',
-      'TESTO_COMPLETO_PEC',
-    ];
+    try {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = `Gare_Selezionate_PEC_ForzaPubblica_${dateStr}_(${targetMatches.length}_gare).csv`;
+      exportMatchesToCsv(targetMatches, filename, useDynamicAsdName);
 
-    const escapeCsv = (str: string) => {
-      const clean = (str || '').replace(/"/g, '""');
-      return `"${clean}"`;
-    };
-
-    const rows = targetMatches.map(m => {
-      const club = CLUBS[m.clubId];
-      const pec = generatePecForMatch(m, useDynamicAsdName);
-      return [
-        escapeCsv(club.name),
-        escapeCsv(m.category),
-        escapeCsv(m.campionato),
-        escapeCsv(m.girone),
-        escapeCsv(m.giornata),
-        escapeCsv(normalizeToGGMMMAAAA(m.data)),
-        escapeCsv(m.ora),
-        escapeCsv(m.squadraCasa),
-        escapeCsv(m.squadraOspite),
-        escapeCsv(m.status),
-        escapeCsv(m.pecSentDate || ''),
-        escapeCsv(COMMISSARIATO_INFO.pec),
-        escapeCsv(pec.oggetto),
-        escapeCsv(pec.intestazione),
-        escapeCsv(pec.corpo),
-        escapeCsv(pec.impianto),
-        escapeCsv(pec.contatto),
-        escapeCsv(pec.chiusuraFirma),
-        escapeCsv(pec.testoCompleto),
-      ].join(';');
-    });
-
-    const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Campi_Separati_PEC_ForzaPubblica_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    if (autoMarkSent) {
-      onMarkMatchesAsSent(targetMatches.map(m => m.id));
+      if (autoMarkSent) {
+        onMarkMatchesAsSent(targetMatches.map(m => m.id));
+      }
+      setExportSuccess('File CSV con stato PEC, date e protocolli esportato con successo!');
+      setTimeout(() => setExportSuccess(null), 3500);
+    } catch (err: any) {
+      alert(`Errore nell'esportazione CSV: ${err?.message}`);
     }
-    setExportSuccess('File CSV con colonne separate esportato!');
-    setTimeout(() => setExportSuccess(null), 3000);
+  };
+
+  // 4b. Export native Microsoft Excel (.XLSX) workbook
+  const handleExportXlsx = () => {
+    if (targetMatches.length === 0) return;
+
+    try {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = `Gare_Selezionate_PEC_ForzaPubblica_${dateStr}_(${targetMatches.length}_gare).xlsx`;
+      exportMatchesToXlsx(targetMatches, filename, useDynamicAsdName);
+
+      if (autoMarkSent) {
+        onMarkMatchesAsSent(targetMatches.map(m => m.id));
+      }
+      setExportSuccess('File Excel (.xlsx) con stato PEC, date e protocolli generato!');
+      setTimeout(() => setExportSuccess(null), 3500);
+    } catch (err: any) {
+      alert(`Errore nell'esportazione Excel: ${err?.message}`);
+    }
   };
 
   return (
@@ -536,26 +501,37 @@ Totale gare incluse: ${targetMatches.length}
               </button>
             </div>
 
-            {/* 5. Tabella CSV (Spans full width on sm screens if odd) */}
-            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col justify-between hover:border-slate-300 transition-colors sm:col-span-2">
+            {/* 5. Tabella Excel & CSV (includes PEC status, date and protocol) */}
+            <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50 flex flex-col justify-between hover:border-emerald-300 transition-colors sm:col-span-2">
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                  <Table className="w-4 h-4" />
+                  <FileSpreadsheet className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900">Tabella CSV / Excel</h3>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Tabella compatibile con Excel e Fogli Google con colonne separate per ciascun campo (Oggetto, Intestazione, Impianto, etc.).
+                  <h3 className="text-xs font-bold text-slate-900">Tabella Excel (.XLSX) & CSV</h3>
+                  <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                    Esporta un foglio di calcolo completo con tutte le colonne separate, inclusi espressamente <strong>Stato Invio PEC</strong>, <strong>Data di Invio</strong> e <strong>Numero di Protocollo</strong> generato.
                   </p>
                 </div>
               </div>
-              <button
-                onClick={handleExportCsv}
-                disabled={targetMatches.length === 0}
-                className="mt-3 w-full py-2 px-3 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 cursor-pointer"
-              >
-                Scarica File .CSV
-              </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+                <button
+                  onClick={handleExportXlsx}
+                  disabled={targetMatches.length === 0}
+                  className="w-full py-2 px-3 text-xs font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Scarica Excel (.XLSX)</span>
+                </button>
+                <button
+                  onClick={handleExportCsv}
+                  disabled={targetMatches.length === 0}
+                  className="w-full py-2 px-3 text-xs font-bold rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Scarica File .CSV</span>
+                </button>
+              </div>
             </div>
           </div>
 

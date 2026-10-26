@@ -1,5 +1,4 @@
-import React from 'react';
-import { Shield, FileText, Upload, RefreshCw, Settings, Download, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Shield, FileText, Upload, RefreshCw, Settings, Download, CheckCircle2, AlertCircle, FileSpreadsheet, Database } from 'lucide-react';
 import { Match } from '../types';
 
 interface HeaderProps {
@@ -10,6 +9,8 @@ interface HeaderProps {
   onLoadSampleData: () => void;
   onDownloadAllZip: () => void;
   onDownloadAllPdfsZip?: () => void;
+  onOpenExportExcel?: () => void;
+  onOpenBackupRestore?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,6 +21,8 @@ export const Header: React.FC<HeaderProps> = ({
   onLoadSampleData,
   onDownloadAllZip,
   onDownloadAllPdfsZip,
+  onOpenExportExcel,
+  onOpenBackupRestore,
 }) => {
   const homeMatches = matches.filter(m => m.isHome);
   const sentMatches = homeMatches.filter(m => m.status === 'inviata');
@@ -101,6 +104,33 @@ export const Header: React.FC<HeaderProps> = ({
               <FileText className="w-4 h-4 text-slate-500" />
               <span>Tutti i Formati (PDF / CSV)</span>
             </button>
+
+            {onOpenExportExcel && (
+              <button
+                onClick={onOpenExportExcel}
+                disabled={matches.length === 0}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg shadow-sm transition-colors cursor-pointer ${
+                  matches.length > 0
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                }`}
+                title="Esporta le gare in formato Excel (.xlsx) o CSV con stato invio PEC, date e protocolli"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Esporta Excel (CSV)</span>
+              </button>
+            )}
+
+            {onOpenBackupRestore && (
+              <button
+                onClick={onOpenBackupRestore}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-purple-200 bg-purple-50 text-purple-900 hover:bg-purple-100 hover:border-purple-300 shadow-sm transition-colors cursor-pointer"
+                title="Salva una copia di sicurezza su file locale o ripristina un backup precedente"
+              >
+                <Database className="w-4 h-4 text-purple-600" />
+                <span>Backup & Ripristino</span>
+              </button>
+            )}
 
             <button
               onClick={onLoadSampleData}
