@@ -19,7 +19,137 @@ export const DEFAULT_COLUMN_MAPPING: ColumnMapping = {
 };
 
 /**
- * Detects which club a match belongs to based on team names, category, or dedicated column
+ * Identifies if a specific team name explicitly matches one of our 4 clubs.
+ * IMPORTANT: Opponents named "Academy Ladispoli", "Academy Ferentino", "Don Bosco Gaeta", "Albalonga", etc.
+ * must NOT trigger false positives for our clubs!
+ */
+export function identifyClubInTeamName(teamName: string): ClubId | null {
+  if (!teamName || typeof teamName !== 'string') return null;
+  const upper = teamName.toUpperCase().trim();
+  if (!upper) return null;
+
+  // 1. Albacynthia (must contain ALBACYNTHIA or ALBA CYNTHIA)
+  if (upper.includes('ALBACYNTHIA') || upper.includes('ALBA CYNTHIA')) {
+    return 'ALBACYNTHIA';
+  }
+
+  // 2. Academy Cynthia (MUST contain both ACADEMY/ACCADEMY/AC. and CYNTHIA)
+  if (
+    (upper.includes('ACADEMY') || upper.includes('ACCADEMY') || upper.includes('AC.')) &&
+    upper.includes('CYNTHIA')
+  ) {
+    return 'ACADEMY_CYNTHIA';
+  }
+
+  // 3. PGS Don Bosco Genzano (must have DON BOSCO and either PGS, P.G.S., or GENZANO)
+  if (
+    upper.includes('P.G.S. DON BOSCO') ||
+    upper.includes('PGS DON BOSCO') ||
+    upper.includes('DON BOSCO GENZANO') ||
+    (upper.includes('DON BOSCO') && upper.includes('GENZANO')) ||
+    (upper.includes('DON BOSCO') && (upper.includes('PGS') || upper.includes('P.G.S.')))
+  ) {
+    return 'PGS_DON_BOSCO';
+  }
+
+  // 4. Cynthia 1920
+  // Explicit "CYNTHIA 1920"
+  if (
+    upper.includes('CYNTHIA 1920') ||
+    upper.includes('CYNTHIA 1920 S.R.L.') ||
+    upper.includes('CYNTHIA 1920 SRL') ||
+    upper.includes('ASD CYNTHIA') ||
+    upper.includes('CYNTHIA GENZANO')
+  ) {
+    return 'CYNTHIA_1920';
+  }
+
+  // "CYNTHIA" alone (without ACADEMY, ACCADEMY, ALBA)
+  if (
+    upper.includes('CYNTHIA') &&
+    !upper.includes('ACADEMY') &&
+    !upper.includes('ACCADEMY') &&
+    !upper.includes('ALBA')
+  ) {
+    return 'CYNTHIA_1920';
+  }
+
+  return null;
+}
+
+/**
+ * Detects the managing club based on official category / championship division.
+ * Rules:
+ * - CYNTHIA 1920: Promozione, Under 19 (Provinciale / Regionale / Juniores), Under 18 (Regionale)
+ * - ACADEMY CYNTHIA: Under 17, Under 16, Under 15, Under 14 Regionali, 3ª Categoria, Serie D C5 Femminile
+ * - PGS DON BOSCO: 2ª Categoria, Serie C2 C5 Maschile, Serie D C5 Femminile PGS
+ * - ALBACYNTHIA: Under 14 Provinciali
+ */
+export function identifyClubFromCategory(campionatoOrCategory: string): ClubId | null {
+  if (!campionatoOrCategory || typeof campionatoOrCategory !== 'string') return null;
+  const upper = campionatoOrCategory.toUpperCase().trim();
+  if (!upper) return null;
+
+  // CYNTHIA 1920 categories:
+  if (
+    upper.includes('PROMOZIONE') ||
+    upper.includes('ECCELLENZA') ||
+    upper.includes('UNDER 19') ||
+    upper.includes('U19') ||
+    upper.includes('JUNIORES') ||
+    upper.includes('UNDER 18') ||
+    upper.includes('U18')
+  ) {
+    return 'CYNTHIA_1920';
+  }
+
+  // PGS Don Bosco categories:
+  if (
+    upper.includes('2CATEGORIA') ||
+    upper.includes('2 CATEGORIA') ||
+    upper.includes('2^ CATEGORIA') ||
+    upper.includes('SECONDA CATEGORIA') ||
+    upper.includes('SERIE C2') ||
+    upper.includes('C2 C5') ||
+    (upper.includes('SERIE D') && upper.includes('PGS'))
+  ) {
+    return 'PGS_DON_BOSCO';
+  }
+
+  // Albacynthia categories:
+  if (
+    upper.includes('ALBACYNTHIA') ||
+    (upper.includes('UNDER 14') && (upper.includes('PROV') || upper.includes('PROVINCIALE') || upper.includes('PROVINCIALI'))) ||
+    (upper.includes('U14') && (upper.includes('PROV') || upper.includes('PROVINCIALE') || upper.includes('PROVINCIALI')))
+  ) {
+    return 'ALBACYNTHIA';
+  }
+
+  // Academy Cynthia categories:
+  if (
+    upper.includes('3CATEGORIA') ||
+    upper.includes('3 CATEGORIA') ||
+    upper.includes('3^ CATEGORIA') ||
+    upper.includes('TERZA CATEGORIA') ||
+    upper.includes('UNDER 17') ||
+    upper.includes('U17') ||
+    upper.includes('UNDER 16') ||
+    upper.includes('U16') ||
+    upper.includes('UNDER 15') ||
+    upper.includes('U15') ||
+    (upper.includes('UNDER 14') && (upper.includes('REG') || upper.includes('REGIONALE') || upper.includes('REGIONALI'))) ||
+    (upper.includes('SERIE D') && !upper.includes('PGS'))
+  ) {
+    return 'ACADEMY_CYNTHIA';
+  }
+
+  return null;
+}
+
+/**
+ * Detects which club a match belongs to based on team names, category, or dedicated column.
+ * Guarantees that Under 19 Provinciale belongs strictly to CYNTHIA 1920 (President: D'AURIA ANTONIO)
+ * and opponents with "Academy" or "Don Bosco" are not misidentified as our home club.
  */
 export function detectClub(
   squadraCasa: string,
@@ -27,97 +157,92 @@ export function detectClub(
   campionato: string,
   extraField: string = ''
 ): ClubId {
-  const text = `${squadraCasa} ${squadraOspite} ${campionato} ${extraField}`.toUpperCase();
-
-  // 1. Albacynthia
-  if (text.includes('ALBACYNTHIA') || text.includes('ALBA CYNTHIA')) {
-    return 'ALBACYNTHIA';
+  // 1. If explicit extraField / societa column is provided, check if it specifies the club
+  if (extraField) {
+    const extraClub = identifyClubInTeamName(extraField);
+    if (extraClub) return extraClub;
   }
 
-  // 2. PGS Don Bosco Genzano
-  if (
-    text.includes('DON BOSCO') ||
-    text.includes('P.G.S.') ||
-    text.includes('PGS DON BOSCO') ||
-    text.includes('SERIE C2') ||
-    text.includes('C2 C5')
-  ) {
-    return 'PGS_DON_BOSCO';
+  // 2. Check team names individually (NOT concatenated!) to identify which team is our club
+  const casaClub = identifyClubInTeamName(squadraCasa);
+  const ospiteClub = identifyClubInTeamName(squadraOspite);
+
+  // If home team is one of our clubs
+  if (casaClub && !ospiteClub) {
+    return casaClub;
+  }
+  // If away team is one of our clubs
+  if (ospiteClub && !casaClub) {
+    return ospiteClub;
+  }
+  // If internal derby between our managed clubs, prioritize home team
+  if (casaClub && ospiteClub) {
+    return casaClub;
   }
 
-  // 3. Academy Cynthia Genzano
-  if (
-    text.includes('ACADEMY') ||
-    text.includes('AC. CYNTHIA') ||
-    text.includes('ACADEMY CYNTHIA')
-  ) {
-    return 'ACADEMY_CYNTHIA';
+  // 3. Check Championship / Category rules (e.g. Under 19 Provinciale -> CYNTHIA_1920)
+  const categoryClub = identifyClubFromCategory(campionato) || identifyClubFromCategory(extraField);
+  if (categoryClub) {
+    return categoryClub;
   }
 
-  // 4. Cynthia 1920
-  if (text.includes('CYNTHIA 1920') || text.includes('CYNTHIA')) {
-    return 'CYNTHIA_1920';
-  }
-
-  // Match by championship if teams are shortened
-  if (text.includes('PROMOZIONE') || text.includes('UNDER 18') || text.includes('UNDER 19')) {
-    return 'CYNTHIA_1920';
-  }
-  if (text.includes('2CATEGORIA') || text.includes('2 CATEGORIA') || text.includes('SECONDA CATEGORIA')) {
-    return 'PGS_DON_BOSCO';
-  }
-  if (text.includes('3CATEGORIA') || text.includes('3 CATEGORIA') || text.includes('UNDER 15') || text.includes('UNDER 16') || text.includes('UNDER 17')) {
-    return 'ACADEMY_CYNTHIA';
-  }
-
-  return 'CYNTHIA_1920'; // default
+  // 4. Default fallback: Cynthia 1920
+  return 'CYNTHIA_1920';
 }
 
 /**
- * Checks if our club is playing at HOME (squadra di casa)
+ * Checks if our club is playing at HOME (squadra di casa).
+ * Returns true if our club is squadraCasa, false if our club is squadraOspite.
  */
 export function isHomeMatch(clubId: ClubId, squadraCasa: string, squadraOspite: string): boolean {
-  const club = CLUBS[clubId];
-  const casaUpper = squadraCasa.toUpperCase();
-  const ospiteUpper = squadraOspite.toUpperCase();
+  const casaClub = identifyClubInTeamName(squadraCasa);
+  const ospiteClub = identifyClubInTeamName(squadraOspite);
 
-  // Check aliases for club
-  for (const alias of club.aliases) {
-    const aliasUpper = alias.toUpperCase();
-    if (casaUpper.includes(aliasUpper)) {
-      return true;
-    }
-    if (ospiteUpper.includes(aliasUpper)) {
-      return false;
-    }
+  // Direct exact match
+  if (casaClub === clubId) {
+    return true;
+  }
+  if (ospiteClub === clubId) {
+    return false;
   }
 
-  // Generic keyword heuristics
+  // Check aliases strictly without matching external opponent names
+  const club = CLUBS[clubId];
+  const casaUpper = (squadraCasa || '').toUpperCase().trim();
+  const ospiteUpper = (squadraOspite || '').toUpperCase().trim();
+
+  for (const alias of club.aliases) {
+    const aliasUpper = alias.toUpperCase();
+    if (casaUpper.includes(aliasUpper)) return true;
+    if (ospiteUpper.includes(aliasUpper)) return false;
+  }
+
+  // Specific heuristics avoiding substrings matching opponents
   if (clubId === 'CYNTHIA_1920') {
-    if (casaUpper.includes('CYNTHIA') && !casaUpper.includes('ACADEMY') && !casaUpper.includes('ALBA')) {
+    if (casaUpper.includes('CYNTHIA') && !casaUpper.includes('ACADEMY') && !casaUpper.includes('ACCADEMY') && !casaUpper.includes('ALBA')) {
       return true;
     }
-    if (ospiteUpper.includes('CYNTHIA') && !ospiteUpper.includes('ACADEMY') && !ospiteUpper.includes('ALBA')) {
+    if (ospiteUpper.includes('CYNTHIA') && !ospiteUpper.includes('ACADEMY') && !ospiteUpper.includes('ACCADEMY') && !ospiteUpper.includes('ALBA')) {
       return false;
     }
   }
 
   if (clubId === 'ACADEMY_CYNTHIA') {
-    if (casaUpper.includes('ACADEMY') || casaUpper.includes('AC. CYNTHIA')) return true;
-    if (ospiteUpper.includes('ACADEMY') || ospiteUpper.includes('AC. CYNTHIA')) return false;
+    if ((casaUpper.includes('ACADEMY') || casaUpper.includes('ACCADEMY')) && casaUpper.includes('CYNTHIA')) return true;
+    if ((ospiteUpper.includes('ACADEMY') || ospiteUpper.includes('ACCADEMY')) && ospiteUpper.includes('CYNTHIA')) return false;
   }
 
   if (clubId === 'PGS_DON_BOSCO') {
-    if (casaUpper.includes('DON BOSCO') || casaUpper.includes('PGS')) return true;
-    if (ospiteUpper.includes('DON BOSCO') || ospiteUpper.includes('PGS')) return false;
+    if (casaUpper.includes('DON BOSCO') && (casaUpper.includes('GENZANO') || casaUpper.includes('PGS') || casaUpper.includes('P.G.S.'))) return true;
+    if (ospiteUpper.includes('DON BOSCO') && (ospiteUpper.includes('GENZANO') || ospiteUpper.includes('PGS') || ospiteUpper.includes('P.G.S.'))) return false;
   }
 
   if (clubId === 'ALBACYNTHIA') {
-    if (casaUpper.includes('ALBACYNTHIA') || casaUpper.includes('ALBA')) return true;
-    if (ospiteUpper.includes('ALBACYNTHIA') || ospiteUpper.includes('ALBA')) return false;
+    if (casaUpper.includes('ALBACYNTHIA') || casaUpper.includes('ALBA CYNTHIA')) return true;
+    if (ospiteUpper.includes('ALBACYNTHIA') || ospiteUpper.includes('ALBA CYNTHIA')) return false;
   }
 
-  // Default assumption if not found: true so secretary doesn't miss potential PEC
+  // Default assumption: true (home) so secretary doesn't miss potential PEC
   return true;
 }
 

@@ -20,7 +20,8 @@ import {
   Edit2, 
   MoreVertical, 
   FileCheck2,
-  ShieldCheck 
+  ShieldCheck,
+  Building2 
 } from 'lucide-react';
 import { Match } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
@@ -47,6 +48,7 @@ interface MatchItemProps {
   onUpdateSentDate?: (newDate: string, newProtocollo?: string) => void;
   onUpdateProtocollo?: (newProtocollo: string) => void;
   onChangeStatus?: () => void;
+  onChangeClub?: () => void;
 }
 
 export const MatchItem: React.FC<MatchItemProps> = ({
@@ -61,6 +63,7 @@ export const MatchItem: React.FC<MatchItemProps> = ({
   onUpdateSentDate,
   onUpdateProtocollo,
   onChangeStatus,
+  onChangeClub,
 }) => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isEditingSentDate, setIsEditingSentDate] = useState<boolean>(false);
@@ -164,14 +167,33 @@ export const MatchItem: React.FC<MatchItemProps> = ({
               className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
             />
 
-            {/* Club Pill */}
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
-              <span
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: club.primaryColor }}
-              />
-              <span>{club.name}</span>
-            </div>
+            {/* Club Pill (Clickable to change club & president) */}
+            {onChangeClub ? (
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  onChangeClub();
+                }}
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 hover:text-blue-700 bg-slate-50 hover:bg-blue-50/80 px-2 py-0.5 rounded-lg border border-slate-200/80 transition-colors cursor-pointer group"
+                title="Clicca per variare società, presidente o condizione casa/trasferta"
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0 group-hover:scale-110 transition-transform"
+                  style={{ backgroundColor: club.primaryColor }}
+                />
+                <span className="group-hover:underline underline-offset-2">{club.name}</span>
+                <Building2 className="w-3 h-3 text-slate-400 group-hover:text-blue-600 ml-0.5" />
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+                <span
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: club.primaryColor }}
+                />
+                <span>{club.name}</span>
+              </div>
+            )}
 
             <span className="text-slate-300 text-xs">/</span>
 
@@ -204,7 +226,7 @@ export const MatchItem: React.FC<MatchItemProps> = ({
                 onToggleIsHome();
               }}
               title="Clicca per invertire Casa / Trasferta"
-              className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border transition-colors ${
+              className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border transition-colors cursor-pointer ${
                 match.isHome
                   ? 'bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100'
                   : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
@@ -213,6 +235,22 @@ export const MatchItem: React.FC<MatchItemProps> = ({
               <Home className="w-3 h-3 text-amber-700" />
               <span>{match.isHome ? 'IN CASA' : 'TRASFERTA'}</span>
             </button>
+
+            {/* Quick Club & President Change Button */}
+            {onChangeClub && (
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  onChangeClub();
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-900 transition-colors cursor-pointer shadow-2xs"
+                title="Varia velocemente società, presidente o tipo di gara"
+              >
+                <Building2 className="w-3 h-3 text-indigo-600" />
+                <span>Varia Società</span>
+              </button>
+            )}
 
             {/* Status Button (Toggle Sent / Da Inviare) */}
             <button
@@ -280,6 +318,19 @@ export const MatchItem: React.FC<MatchItemProps> = ({
                     }} 
                   />
                   <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 text-xs">
+                    {onChangeClub && (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          setShowQuickMenu(false);
+                          onChangeClub();
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-indigo-50 flex items-center gap-2 text-indigo-700 font-semibold"
+                      >
+                        <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Varia Società e Presidente...</span>
+                      </button>
+                    )}
                     {onChangeStatus && (
                       <button
                         onClick={e => {
@@ -515,10 +566,25 @@ export const MatchItem: React.FC<MatchItemProps> = ({
               <span>{club.contactName} ({club.contactPhone})</span>
             </span>
             <span aria-hidden="true" className="text-slate-300">·</span>
-            <span className="flex items-center gap-1">
-              <UserCheck className="w-3 h-3 text-slate-400" />
-              <span>Pres. {club.president}</span>
-            </span>
+            {onChangeClub ? (
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  onChangeClub();
+                }}
+                className="flex items-center gap-1 hover:text-indigo-700 hover:underline cursor-pointer"
+                title="Clicca per variare società e presidente"
+              >
+                <UserCheck className="w-3 h-3 text-slate-400" />
+                <span>Pres. {club.president}</span>
+              </button>
+            ) : (
+              <span className="flex items-center gap-1">
+                <UserCheck className="w-3 h-3 text-slate-400" />
+                <span>Pres. {club.president}</span>
+              </span>
+            )}
           </div>
 
           {/* Action Buttons */}

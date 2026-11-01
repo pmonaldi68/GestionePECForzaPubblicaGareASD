@@ -39,6 +39,7 @@ interface PecPreviewModalProps {
   onChangeFacility?: () => void;
   onUpdateSentDate?: (matchId: string, newDate: string, newProtocollo?: string) => void;
   onChangeStatus?: () => void;
+  onChangeClub?: () => void;
 }
 
 export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
@@ -49,6 +50,7 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
   onChangeFacility,
   onUpdateSentDate,
   onChangeStatus,
+  onChangeClub,
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isEditingDate, setIsEditingDate] = useState<boolean>(false);
@@ -177,6 +179,18 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
                 </>
               )}
             </button>
+
+            {onChangeClub && (
+              <button
+                type="button"
+                onClick={onChangeClub}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-900 transition-colors cursor-pointer shadow-2xs"
+                title="Varia società, presidente e tipo di gara"
+              >
+                <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Varia Società / Pres.</span>
+              </button>
+            )}
 
             {onChangeStatus && (
               <button
@@ -429,9 +443,19 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
           {/* 6. CHIUSURA E FIRMA PRESIDENTE */}
           <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
             <div className="bg-slate-100/70 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                6. Saluti Finali e Firma del Presidente
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  6. Saluti Finali e Firma del Presidente
+                </span>
+                {onChangeClub && (
+                  <button
+                    onClick={onChangeClub}
+                    className="text-[10px] font-semibold text-indigo-800 hover:text-indigo-950 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded border border-indigo-200 transition-colors cursor-pointer"
+                  >
+                    Varia Presidente / Società
+                  </button>
+                )}
+              </div>
               <button
                 onClick={() => handleCopy(pec.chiusuraFirma, 'firma')}
                 className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"

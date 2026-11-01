@@ -63,6 +63,21 @@ export const SAMPLE_MATCHES: Match[] = [
     facilityText: "LA GARA SI DISPUTERÀ PRESSO L’IMPIANTO SPORTIVO CITTA' DELL'INFIORATA, SITO IN VIA SARDEGNA, 14,GENZANO DI ROMA (RM).",
     status: 'da_inviare',
   },
+  {
+    id: 'sample_cynthia_u19_nov7',
+    clubId: 'CYNTHIA_1920',
+    category: 'UNDER 19 PROVINCIALE',
+    campionato: 'UNDER 19 PROVINCIALE',
+    girone: 'A',
+    giornata: '7^ GIORNATA',
+    data: '07/11/2026',
+    ora: '15:00',
+    squadraCasa: 'CYNTHIA 1920',
+    squadraOspite: 'ACADEMY SPORTING',
+    isHome: true,
+    facilityText: "LA GARA SI DISPUTERÀ PRESSO L’IMPIANTO SPORTIVO CITTA' DELL'INFIORATA, SITO IN VIA SARDEGNA, 14,GENZANO DI ROMA (RM).",
+    status: 'da_inviare',
+  },
 
   // --- ACADEMY CYNTHIA GENZANO ---
   {

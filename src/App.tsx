@@ -15,8 +15,9 @@ import { ChangeStatusModal } from './components/ChangeStatusModal';
 import { CalendarView } from './components/CalendarView';
 import { GoogleSheetSyncBar } from './components/GoogleSheetSyncBar';
 import { FacilityChangeModal } from './components/FacilityChangeModal';
-import { Calendar, AlertCircle, AlertTriangle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2, Trash2 } from 'lucide-react';
-import { downloadAllDraftsAsZip, resolveMatchCategory } from './utils/pecGenerator';
+import { ChangeClubModal } from './components/ChangeClubModal';
+import { Calendar, AlertCircle, AlertTriangle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2, Trash2, Building2 } from 'lucide-react';
+import { downloadAllDraftsAsZip, resolveMatchCategory, resolveFacilityText } from './utils/pecGenerator';
 import { downloadAllPdfsAsZip } from './utils/pdfGenerator';
 import { getGoogleSheetsCsvUrl, parseRawText, DEFAULT_COLUMN_MAPPING, isRiposoMatch } from './utils/sheetParser';
 import { formatDateToGGMMMAAAA, parseMatchDate, getMatchPriority } from './utils/dateUtils';
@@ -32,6 +33,24 @@ const DYNAMIC_ASD_KEY = 'asd_pec_dynamic_name_v1';
 const STORAGE_SHEET_URL_KEY = 'asd_pec_google_sheet_url_v1';
 const STORAGE_LAST_SYNC_KEY = 'asd_pec_last_sync_v1';
 
+/**
+ * Ensures matches for categories like Under 19 Provinciale are strictly mapped
+ * to CYNTHIA 1920 (President: D'AURIA ANTONIO) instead of Academy Cynthia.
+ */
+function fixMisassignedClubCategories(matchList: Match[]): Match[] {
+  return matchList.map(m => {
+    const cat = (m.category || m.campionato || '').toUpperCase();
+    if ((cat.includes('UNDER 19') || cat.includes('JUNIORES')) && m.clubId === 'ACADEMY_CYNTHIA') {
+      return {
+        ...m,
+        clubId: 'CYNTHIA_1920' as ClubId,
+        facilityText: resolveFacilityText('CYNTHIA_1920', m.category || m.campionato),
+      };
+    }
+    return m;
+  });
+}
+
 export default function App() {
   // Load saved matches or fallback to samples, guaranteeing strictly unique IDs and restoring persistent status
   const [matches, setMatches] = useState<Match[]>(() => {
@@ -46,7 +65,8 @@ export default function App() {
               ...m,
               category: resolveMatchCategory(m),
             }));
-          return deduplicateAndPreserveSentMatches(applyStatusRegistryToMatches(cleaned));
+          const fixed = fixMisassignedClubCategories(cleaned);
+          return deduplicateAndPreserveSentMatches(applyStatusRegistryToMatches(fixed));
         }
       }
     } catch {
@@ -58,7 +78,8 @@ export default function App() {
         ...m,
         category: resolveMatchCategory(m),
       }));
-    return deduplicateAndPreserveSentMatches(applyStatusRegistryToMatches(samples));
+    const fixedSamples = fixMisassignedClubCategories(samples);
+    return deduplicateAndPreserveSentMatches(applyStatusRegistryToMatches(fixedSamples));
   });
 
   const [useDynamicAsdName, setUseDynamicAsdName] = useState<boolean>(() => {
@@ -118,6 +139,7 @@ export default function App() {
   const [isBackupRestoreOpen, setIsBackupRestoreOpen] = useState<boolean>(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
   const [changeStatusTargetMatches, setChangeStatusTargetMatches] = useState<Match[] | null>(null);
+  const [changeClubTargetMatches, setChangeClubTargetMatches] = useState<Match[] | null>(null);
 
   // Auto-sync function: updates matches from Google Sheet link preserving sent status and dates
   const fetchAndSyncFromSheet = async (url: string) => {
@@ -436,11 +458,27 @@ export default function App() {
     }
   };
 
-  // Toggle match home/away
+  // Toggle match home/away with immediate save
   const handleToggleIsHome = (id: string) => {
-    setMatches(prev =>
-      prev.map(m => (m.id === id ? { ...m, isHome: !m.isHome } : m))
-    );
+    let targetUpdated: Match | null = null;
+    setMatches(prev => {
+      const next = prev.map(m => {
+        if (m.id === id) {
+          const updated = { ...m, isHome: !m.isHome };
+          targetUpdated = updated;
+          return updated;
+        }
+        return m;
+      });
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    if (activePreviewMatch && activePreviewMatch.id === id && targetUpdated) {
+      setActivePreviewMatch(targetUpdated);
+    }
   };
 
   // Update facility (quick venue variation)
@@ -448,8 +486,8 @@ export default function App() {
     const targetMatch = matches.find(m => m.id === matchId);
     if (!targetMatch) return;
 
-    setMatches(prev =>
-      prev.map(m => {
+    setMatches(prev => {
+      const next = prev.map(m => {
         if (m.id === matchId) {
           return { ...m, facilityText: newFacilityText };
         }
@@ -462,8 +500,12 @@ export default function App() {
           return { ...m, facilityText: newFacilityText };
         }
         return m;
-      })
-    );
+      });
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
 
     // If active preview is currently open, sync it
     if (activePreviewMatch) {
@@ -474,6 +516,70 @@ export default function App() {
           (activePreviewMatch.category === targetMatch.category || activePreviewMatch.campionato === targetMatch.campionato))
       ) {
         setActivePreviewMatch(prev => (prev ? { ...prev, facilityText: newFacilityText } : null));
+      }
+    }
+  };
+
+  // Update club, president and home/away condition (fast variation function)
+  const handleUpdateMatchClub = (
+    targetMatchIds: string[],
+    newClubId: ClubId,
+    newIsHome: boolean,
+    updateFacility: boolean,
+    applyToEntireCategory: boolean
+  ) => {
+    const targetMatch = matches.find(m => targetMatchIds.includes(m.id));
+    const matchCat = targetMatch?.category || targetMatch?.campionato;
+
+    setMatches(prev => {
+      const next = prev.map(m => {
+        const isDirect = targetMatchIds.includes(m.id);
+        const isCatMatch =
+          applyToEntireCategory &&
+          Boolean(matchCat) &&
+          (m.category === matchCat || m.campionato === matchCat);
+
+        if (isDirect || isCatMatch) {
+          const facText = updateFacility
+            ? resolveFacilityText(newClubId, m.category || m.campionato)
+            : m.facilityText;
+          return {
+            ...m,
+            clubId: newClubId,
+            isHome: isDirect ? newIsHome : m.isHome,
+            facilityText: facText,
+          };
+        }
+        return m;
+      });
+
+      const clean = deduplicateAndPreserveSentMatches(next);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+      } catch {}
+      return clean;
+    });
+
+    if (activePreviewMatch) {
+      const isDirectPreview = targetMatchIds.includes(activePreviewMatch.id);
+      const isCatPreview =
+        applyToEntireCategory &&
+        Boolean(matchCat) &&
+        (activePreviewMatch.category === matchCat || activePreviewMatch.campionato === matchCat);
+
+      if (isDirectPreview || isCatPreview) {
+        setActivePreviewMatch(prev => {
+          if (!prev) return null;
+          const facText = updateFacility
+            ? resolveFacilityText(newClubId, prev.category || prev.campionato)
+            : prev.facilityText;
+          return {
+            ...prev,
+            clubId: newClubId,
+            isHome: isDirectPreview ? newIsHome : prev.isHome,
+            facilityText: facText,
+          };
+        });
       }
     }
   };
@@ -666,6 +772,7 @@ export default function App() {
         onOpenExportExcel={() => setIsExportExcelOpen(true)}
         onDeleteSelected={() => setIsDeleteConfirmOpen(true)}
         onChangeStatusSelected={() => setChangeStatusTargetMatches(matches.filter(m => selectedMatchIds.includes(m.id)))}
+        onChangeClubSelected={() => setChangeClubTargetMatches(matches.filter(m => selectedMatchIds.includes(m.id)))}
       />
 
       {/* Main Content Area */}
@@ -682,6 +789,15 @@ export default function App() {
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setChangeClubTargetMatches(matches.filter(m => selectedMatchIds.includes(m.id)))}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors cursor-pointer text-xs shadow-xs"
+                title="Varia la società, il presidente o la condizione casa/trasferta per le gare selezionate"
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span>Varia Società ({selectedMatchIds.length})</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setChangeStatusTargetMatches(matches.filter(m => selectedMatchIds.includes(m.id)))}
@@ -809,6 +925,7 @@ export default function App() {
                 onUpdateSentDate={(newDate, newProt) => handleUpdateSentDate(match.id, newDate, newProt)}
                 onUpdateProtocollo={newProt => handleUpdateProtocollo(match.id, newProt)}
                 onChangeStatus={() => setChangeStatusTargetMatches([match])}
+                onChangeClub={() => setChangeClubTargetMatches([match])}
               />
             ))}
           </div>
@@ -870,6 +987,11 @@ export default function App() {
         onChangeStatus={() => {
           if (activePreviewMatch) {
             setChangeStatusTargetMatches([activePreviewMatch]);
+          }
+        }}
+        onChangeClub={() => {
+          if (activePreviewMatch) {
+            setChangeClubTargetMatches([activePreviewMatch]);
           }
         }}
       />
@@ -940,6 +1062,14 @@ export default function App() {
         matches={changeStatusTargetMatches || []}
         onSaveStatus={handleSaveStatus}
         useDynamicAsdName={useDynamicAsdName}
+      />
+
+      <ChangeClubModal
+        isOpen={Boolean(changeClubTargetMatches)}
+        onClose={() => setChangeClubTargetMatches(null)}
+        matches={changeClubTargetMatches || []}
+        allMatches={matches}
+        onSave={handleUpdateMatchClub}
       />
     </div>
   );

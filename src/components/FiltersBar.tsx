@@ -14,7 +14,8 @@ import {
   CheckCircle2, 
   AlertCircle,
   FileSpreadsheet,
-  Trash2
+  Trash2,
+  Building2
 } from 'lucide-react';
 import { ClubId, DateRangeFilter, DateRangePreset } from '../types';
 import { CLUBS } from '../config/clubsData';
@@ -43,6 +44,7 @@ interface FiltersBarProps {
   onOpenExportExcel?: () => void;
   onDeleteSelected?: () => void;
   onChangeStatusSelected?: () => void;
+  onChangeClubSelected?: () => void;
 }
 
 export const FiltersBar: React.FC<FiltersBarProps> = ({
@@ -69,6 +71,7 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
   onOpenExportExcel,
   onDeleteSelected,
   onChangeStatusSelected,
+  onChangeClubSelected,
 }) => {
   const [showCustomDateInputs, setShowCustomDateInputs] = useState(dateRange.preset === 'CUSTOM');
 
@@ -316,6 +319,18 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
                     <span>Esporta Excel (CSV)</span>
+                  </button>
+                )}
+
+                {selectedMatchIds.length > 0 && onChangeClubSelected && (
+                  <button
+                    type="button"
+                    onClick={onChangeClubSelected}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-md bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs transition-colors cursor-pointer"
+                    title={`Varia la società e il presidente per le ${selectedMatchIds.length} gare selezionate`}
+                  >
+                    <Building2 className="w-3.5 h-3.5" />
+                    <span>Varia Società ({selectedMatchIds.length})</span>
                   </button>
                 )}
 
