@@ -16,7 +16,8 @@ import {
   DEFAULT_COLUMN_MAPPING, 
   parseRawText, 
   parseFileBuffer, 
-  getGoogleSheetsCsvUrl 
+  getGoogleSheetsCsvUrl,
+  isRiposoMatch
 } from '../utils/sheetParser';
 import { SAMPLE_MATCHES } from '../data/sampleMatches';
 
@@ -165,7 +166,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
 
   // Handle Loading Sample Demo
   const handleLoadSample = () => {
-    onMatchesImported(SAMPLE_MATCHES);
+    onMatchesImported(SAMPLE_MATCHES.filter(m => !isRiposoMatch(m)));
     onClose();
   };
 

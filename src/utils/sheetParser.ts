@@ -182,6 +182,28 @@ export function autoDetectColumnMapping(headers: string[]): ColumnMapping {
 }
 
 /**
+ * Identifies if a match, row or team indicates a rest turn ("RIPOSO" / "RIPOSA").
+ * Any match containing "RIPOSO" or "RIPOSA" must NOT be included in the list of matches.
+ */
+export function isRiposoMatch(m: {
+  squadraCasa?: string;
+  squadraOspite?: string;
+  campionato?: string;
+  notes?: string;
+  category?: string;
+  girone?: string;
+  giornata?: string;
+} | null | undefined): boolean {
+  if (!m) return false;
+  const fields = [m.squadraCasa, m.squadraOspite, m.campionato, m.notes, m.category, m.girone, m.giornata];
+  return fields.some(field => {
+    if (!field || typeof field !== 'string') return false;
+    const upper = field.trim().toUpperCase();
+    return upper.includes('RIPOSO') || upper.includes('RIPOSA') || /\bRIPOS[OA]\b/.test(upper);
+  });
+}
+
+/**
  * Converts 2D array of strings into Match models
  */
 export function parseGridToMatches(grid: string[][], mapping: ColumnMapping = DEFAULT_COLUMN_MAPPING): Match[] {
@@ -212,6 +234,16 @@ export function parseGridToMatches(grid: string[][], mapping: ColumnMapping = DE
       continue;
     }
 
+    // Skip entire row if it mentions "RIPOSO" or "RIPOSA" anywhere
+    const isRiposoRow = row.some(cell => {
+      if (!cell || typeof cell !== 'string') return false;
+      const upper = cell.trim().toUpperCase();
+      return upper.includes('RIPOSO') || upper.includes('RIPOSA') || /\bRIPOS[OA]\b/.test(upper);
+    });
+    if (isRiposoRow) {
+      continue;
+    }
+
     const campionato = (row[activeMapping.campionatoCol] || '').trim();
     const girone = (row[activeMapping.gironeCol] || '').trim();
     const giornata = (row[activeMapping.giornataCol] || '').trim();
@@ -231,6 +263,11 @@ export function parseGridToMatches(grid: string[][], mapping: ColumnMapping = DE
 
     // Skip if crucial fields are missing
     if (!squadraCasa && !squadraOspite && !campionato) {
+      continue;
+    }
+
+    // Exclude matches where home, away, or championship indicates a rest turn
+    if (isRiposoMatch({ squadraCasa, squadraOspite, campionato, girone, giornata })) {
       continue;
     }
 

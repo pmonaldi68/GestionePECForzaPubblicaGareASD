@@ -13,7 +13,8 @@ import {
   EyeOff, 
   CheckCircle2, 
   AlertCircle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Trash2
 } from 'lucide-react';
 import { ClubId, DateRangeFilter, DateRangePreset } from '../types';
 import { CLUBS } from '../config/clubsData';
@@ -40,6 +41,7 @@ interface FiltersBarProps {
   dateRange: DateRangeFilter;
   onDateRangeChange: (val: DateRangeFilter) => void;
   onOpenExportExcel?: () => void;
+  onDeleteSelected?: () => void;
 }
 
 export const FiltersBar: React.FC<FiltersBarProps> = ({
@@ -64,6 +66,7 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
   dateRange,
   onDateRangeChange,
   onOpenExportExcel,
+  onDeleteSelected,
 }) => {
   const [showCustomDateInputs, setShowCustomDateInputs] = useState(dateRange.preset === 'CUSTOM');
 
@@ -311,6 +314,18 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
                     <span>Esporta Excel (CSV)</span>
+                  </button>
+                )}
+
+                {selectedMatchIds.length > 0 && onDeleteSelected && (
+                  <button
+                    type="button"
+                    onClick={onDeleteSelected}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-md bg-red-600 hover:bg-red-700 text-white shadow-2xs transition-colors cursor-pointer"
+                    title={`Elimina definitivamente le ${selectedMatchIds.length} gare selezionate`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Elimina ({selectedMatchIds.length})</span>
                   </button>
                 )}
 

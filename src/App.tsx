@@ -10,13 +10,14 @@ import { BatchExportModal } from './components/BatchExportModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ExportExcelModal } from './components/ExportExcelModal';
 import { BackupRestoreModal } from './components/BackupRestoreModal';
+import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
 import { CalendarView } from './components/CalendarView';
 import { GoogleSheetSyncBar } from './components/GoogleSheetSyncBar';
 import { FacilityChangeModal } from './components/FacilityChangeModal';
-import { Calendar, AlertCircle, AlertTriangle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2 } from 'lucide-react';
+import { Calendar, AlertCircle, AlertTriangle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2, Trash2 } from 'lucide-react';
 import { downloadAllDraftsAsZip, resolveMatchCategory } from './utils/pecGenerator';
 import { downloadAllPdfsAsZip } from './utils/pdfGenerator';
-import { getGoogleSheetsCsvUrl, parseRawText, DEFAULT_COLUMN_MAPPING } from './utils/sheetParser';
+import { getGoogleSheetsCsvUrl, parseRawText, DEFAULT_COLUMN_MAPPING, isRiposoMatch } from './utils/sheetParser';
 import { formatDateToGGMMMAAAA, parseMatchDate, getMatchPriority } from './utils/dateUtils';
 import { mergeMatchesPreservingSent, formatCurrentSendDate, generateProtocolloNumber, ensureUniqueMatchIds } from './utils/matchMerger';
 
@@ -26,26 +27,30 @@ const STORAGE_SHEET_URL_KEY = 'asd_pec_google_sheet_url_v1';
 const STORAGE_LAST_SYNC_KEY = 'asd_pec_last_sync_v1';
 
 export default function App() {
-  // Load saved matches or fallback to samples, guaranteeing strictly unique IDs and resolved categories
+  // Load saved matches or fallback to samples, guaranteeing strictly unique IDs and excluding any RIPOSO match
   const [matches, setMatches] = useState<Match[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return ensureUniqueMatchIds(parsed).map(m => ({
-            ...m,
-            category: resolveMatchCategory(m),
-          }));
+          return ensureUniqueMatchIds(parsed)
+            .filter(m => !isRiposoMatch(m))
+            .map(m => ({
+              ...m,
+              category: resolveMatchCategory(m),
+            }));
         }
       }
     } catch {
       // Ignore
     }
-    return ensureUniqueMatchIds(SAMPLE_MATCHES).map(m => ({
-      ...m,
-      category: resolveMatchCategory(m),
-    }));
+    return ensureUniqueMatchIds(SAMPLE_MATCHES)
+      .filter(m => !isRiposoMatch(m))
+      .map(m => ({
+        ...m,
+        category: resolveMatchCategory(m),
+      }));
   });
 
   const [useDynamicAsdName, setUseDynamicAsdName] = useState<boolean>(() => {
@@ -103,6 +108,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isExportExcelOpen, setIsExportExcelOpen] = useState<boolean>(false);
   const [isBackupRestoreOpen, setIsBackupRestoreOpen] = useState<boolean>(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
 
   // Auto-sync function: updates matches from Google Sheet link preserving sent status and dates
   const fetchAndSyncFromSheet = async (url: string) => {
@@ -133,7 +139,7 @@ export default function App() {
         csvContent = await directRes.text();
       }
 
-      const parsedMatches = parseRawText(csvContent, DEFAULT_COLUMN_MAPPING);
+      const parsedMatches = parseRawText(csvContent, DEFAULT_COLUMN_MAPPING).filter(m => !isRiposoMatch(m));
       if (parsedMatches.length === 0) {
         throw new Error('Nessuna gara valida trovata nel foglio.');
       }
@@ -445,15 +451,28 @@ export default function App() {
     }
   };
 
-  // Import new matches with safe merging
+  // Selected matches to delete in bulk
+  const selectedMatchesToDelete = useMemo(() => {
+    return matches.filter(m => selectedMatchIds.includes(m.id));
+  }, [matches, selectedMatchIds]);
+
+  // Bulk delete selected matches after user confirmation dialog
+  const handleConfirmBulkDelete = () => {
+    setMatches(prev => prev.filter(m => !selectedMatchIds.includes(m.id)));
+    setSelectedMatchIds([]);
+    setIsDeleteConfirmOpen(false);
+  };
+
+  // Import new matches with safe merging and excluding RIPOSO
   const handleMatchesImported = (imported: Match[]) => {
-    setMatches(prev => mergeMatchesPreservingSent(prev, imported));
+    const valid = imported.filter(m => !isRiposoMatch(m));
+    setMatches(prev => mergeMatchesPreservingSent(prev, valid));
     setSelectedMatchIds([]);
   };
 
-  // Reset to sample data
+  // Reset to sample data (excluding RIPOSO)
   const handleLoadSampleData = () => {
-    setMatches(ensureUniqueMatchIds(SAMPLE_MATCHES));
+    setMatches(ensureUniqueMatchIds(SAMPLE_MATCHES).filter(m => !isRiposoMatch(m)));
     setSelectedMatchIds([]);
   };
 
@@ -463,10 +482,12 @@ export default function App() {
     newSettings?: { useDynamicAsdName: boolean; sheetUrl: string; lastSyncTime: string | null },
     restoreSettings: boolean = true
   ) => {
-    const cleanMatches = ensureUniqueMatchIds(newMatches).map(m => ({
-      ...m,
-      category: resolveMatchCategory(m),
-    }));
+    const cleanMatches = ensureUniqueMatchIds(newMatches)
+      .filter(m => !isRiposoMatch(m))
+      .map(m => ({
+        ...m,
+        category: resolveMatchCategory(m),
+      }));
     setMatches(cleanMatches);
     setSelectedMatchIds([]);
 
@@ -549,10 +570,49 @@ export default function App() {
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
         onOpenExportExcel={() => setIsExportExcelOpen(true)}
+        onDeleteSelected={() => setIsDeleteConfirmOpen(true)}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Bulk Action Bar for Selected Matches in List View */}
+        {selectedMatchIds.length > 0 && (
+          <div className="mb-4 bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-white shadow-md animate-in fade-in slide-in-from-top-1">
+            <div className="flex items-center gap-3">
+              <span className="bg-blue-600 text-white font-bold px-2.5 py-1 rounded-lg text-xs">
+                {selectedMatchIds.length} {selectedMatchIds.length === 1 ? 'gara selezionata' : 'gare selezionate'}
+              </span>
+              <p className="text-slate-300">
+                Azioni rapide per gli elementi selezionati nella lista delle gare.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsBatchExportOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors cursor-pointer text-xs"
+              >
+                Esporta / Stampa ({selectedMatchIds.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDeleteConfirmOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors cursor-pointer text-xs shadow-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Elimina Selezionate ({selectedMatchIds.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedMatchIds([])}
+                className="px-2.5 py-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer text-xs"
+              >
+                Deseleziona
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Urgent Upcoming Matches Alert Banner (Within next 3 days) */}
         {urgentUnsentMatches.length > 0 && statusFilter !== 'inviata' && (
           <div className="mb-4 bg-rose-50 border border-rose-300 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-rose-950 shadow-xs">
@@ -755,6 +815,13 @@ export default function App() {
         sheetUrl={sheetUrl}
         lastSyncTime={lastSyncTime}
         onRestoreArchive={handleRestoreArchive}
+      />
+
+      <ConfirmDeleteModal
+        isOpen={isDeleteConfirmOpen}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        onConfirm={handleConfirmBulkDelete}
+        selectedMatches={selectedMatchesToDelete}
       />
     </div>
   );
