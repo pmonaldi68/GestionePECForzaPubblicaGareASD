@@ -1,5 +1,11 @@
 import { Match } from '../types';
 import { normalizeToGGMMMAAAA, formatDateToGGMMMAAAA } from './dateUtils';
+import { 
+  cleanTeamName, 
+  cleanDate, 
+  findStatusInRegistry, 
+  deduplicateAndPreserveSentMatches 
+} from './statusRegistry';
 
 /**
  * Normalizes string for fingerprinting (removes accents, punctuation, spacing)
@@ -14,22 +20,22 @@ function cleanKey(val?: string): string {
 
 /**
  * Returns a robust unique key for a match based on Home Team, Away Team, and Date.
- * If both teams are missing or blank, returns empty string to prevent collisions.
+ * Uses cleanTeamName to ensure aliases (e.g. "ASD CYNTHIA 1920" and "CYNTHIA 1920") match perfectly.
  */
 export function getMatchKey(m: Partial<Match>): string {
-  const home = cleanKey(m.squadraCasa);
-  const away = cleanKey(m.squadraOspite);
+  const home = cleanTeamName(m.squadraCasa);
+  const away = cleanTeamName(m.squadraOspite);
   if (!home && !away) return '';
-  const normDate = normalizeToGGMMMAAAA(m.data);
-  return `${home}__${away}__${cleanKey(normDate)}`;
+  const d = cleanDate(m.data);
+  return `${home}__${away}__${d}`;
 }
 
 /**
  * Secondary key using Championship, Round, and Teams (useful if match date was rescheduled)
  */
 export function getMatchSecondaryKey(m: Partial<Match>): string {
-  const home = cleanKey(m.squadraCasa);
-  const away = cleanKey(m.squadraOspite);
+  const home = cleanTeamName(m.squadraCasa);
+  const away = cleanTeamName(m.squadraOspite);
   if (!home && !away) return '';
   return `${cleanKey(m.campionato)}__${cleanKey(m.girone)}__${cleanKey(m.giornata)}__${home}__${away}`;
 }
@@ -167,20 +173,45 @@ export function mergeMatchesPreservingSent(
           ...existing,
         });
       } else {
-        // Match is pending (da_inviare): update latest details from sheet but preserve stable id & user edits
-        result.push({
-          ...inc,
-          id: existing.id, // preserve ID so selection and React keys remain stable
-          status: 'da_inviare',
-          facilityText: existing.facilityText || inc.facilityText,
-          notes: existing.notes || inc.notes,
-        });
+        // Check if persistent registry has recorded this match as sent
+        const reg = findStatusInRegistry(existing) || findStatusInRegistry(inc);
+        if (reg && reg.status === 'inviata') {
+          result.push({
+            ...inc,
+            id: existing.id,
+            status: 'inviata',
+            pecSentDate: reg.pecSentDate || formatCurrentSendDate(),
+            protocollo: reg.protocollo || generateProtocolloNumber(),
+            facilityText: existing.facilityText || inc.facilityText,
+            notes: reg.notes || existing.notes || inc.notes,
+          });
+        } else {
+          // Match is pending (da_inviare): update latest details from sheet but preserve stable id & user edits
+          result.push({
+            ...inc,
+            id: existing.id, // preserve ID so selection and React keys remain stable
+            status: 'da_inviare',
+            facilityText: existing.facilityText || inc.facilityText,
+            notes: existing.notes || inc.notes,
+          });
+        }
       }
     } else {
-      // New match from Google Sheet - ensure it has a unique fresh ID if needed
-      result.push({
-        ...inc,
-      });
+      // New match from Google Sheet - check if it was previously marked as sent in registry
+      const reg = findStatusInRegistry(inc);
+      if (reg && reg.status === 'inviata') {
+        result.push({
+          ...inc,
+          status: 'inviata',
+          pecSentDate: reg.pecSentDate || formatCurrentSendDate(),
+          protocollo: reg.protocollo || generateProtocolloNumber(),
+          notes: reg.notes || inc.notes,
+        });
+      } else {
+        result.push({
+          ...inc,
+        });
+      }
     }
   }
 
@@ -192,6 +223,9 @@ export function mergeMatchesPreservingSent(
     }
   }
 
+  // Deduplicate so an 'inviata' match always takes precedence over an identical 'da_inviare' match
+  const deduplicated = deduplicateAndPreserveSentMatches(result);
+
   // Ensure 100% unique IDs across all matches to prevent any duplicate key errors
-  return ensureUniqueMatchIds(result);
+  return ensureUniqueMatchIds(deduplicated);
 }

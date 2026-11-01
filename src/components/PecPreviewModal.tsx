@@ -38,6 +38,7 @@ interface PecPreviewModalProps {
   useDynamicAsdName: boolean;
   onChangeFacility?: () => void;
   onUpdateSentDate?: (matchId: string, newDate: string, newProtocollo?: string) => void;
+  onChangeStatus?: () => void;
 }
 
 export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
@@ -47,6 +48,7 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
   useDynamicAsdName,
   onChangeFacility,
   onUpdateSentDate,
+  onChangeStatus,
 }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [isEditingDate, setIsEditingDate] = useState<boolean>(false);
@@ -175,6 +177,18 @@ export const PecPreviewModal: React.FC<PecPreviewModalProps> = ({
                 </>
               )}
             </button>
+
+            {onChangeStatus && (
+              <button
+                type="button"
+                onClick={onChangeStatus}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer shadow-2xs"
+                title="Procedura per variare lo stato, data invio e protocollo"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+                <span>Varia Stato</span>
+              </button>
+            )}
 
             <button
               onClick={onClose}

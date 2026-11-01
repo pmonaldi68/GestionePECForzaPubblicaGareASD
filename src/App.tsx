@@ -11,6 +11,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { ExportExcelModal } from './components/ExportExcelModal';
 import { BackupRestoreModal } from './components/BackupRestoreModal';
 import { ConfirmDeleteModal } from './components/ConfirmDeleteModal';
+import { ChangeStatusModal } from './components/ChangeStatusModal';
 import { CalendarView } from './components/CalendarView';
 import { GoogleSheetSyncBar } from './components/GoogleSheetSyncBar';
 import { FacilityChangeModal } from './components/FacilityChangeModal';
@@ -20,6 +21,11 @@ import { downloadAllPdfsAsZip } from './utils/pdfGenerator';
 import { getGoogleSheetsCsvUrl, parseRawText, DEFAULT_COLUMN_MAPPING, isRiposoMatch } from './utils/sheetParser';
 import { formatDateToGGMMMAAAA, parseMatchDate, getMatchPriority } from './utils/dateUtils';
 import { mergeMatchesPreservingSent, formatCurrentSendDate, generateProtocolloNumber, ensureUniqueMatchIds } from './utils/matchMerger';
+import { 
+  applyStatusRegistryToMatches, 
+  deduplicateAndPreserveSentMatches, 
+  recordMatchStatusChange 
+} from './utils/statusRegistry';
 
 const STORAGE_KEY = 'asd_pec_matches_v1';
 const DYNAMIC_ASD_KEY = 'asd_pec_dynamic_name_v1';
@@ -27,30 +33,32 @@ const STORAGE_SHEET_URL_KEY = 'asd_pec_google_sheet_url_v1';
 const STORAGE_LAST_SYNC_KEY = 'asd_pec_last_sync_v1';
 
 export default function App() {
-  // Load saved matches or fallback to samples, guaranteeing strictly unique IDs and excluding any RIPOSO match
+  // Load saved matches or fallback to samples, guaranteeing strictly unique IDs and restoring persistent status
   const [matches, setMatches] = useState<Match[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return ensureUniqueMatchIds(parsed)
+          const cleaned = ensureUniqueMatchIds(parsed)
             .filter(m => !isRiposoMatch(m))
             .map(m => ({
               ...m,
               category: resolveMatchCategory(m),
             }));
+          return deduplicateAndPreserveSentMatches(applyStatusRegistryToMatches(cleaned));
         }
       }
     } catch {
       // Ignore
     }
-    return ensureUniqueMatchIds(SAMPLE_MATCHES)
+    const samples = ensureUniqueMatchIds(SAMPLE_MATCHES)
       .filter(m => !isRiposoMatch(m))
       .map(m => ({
         ...m,
         category: resolveMatchCategory(m),
       }));
+    return deduplicateAndPreserveSentMatches(applyStatusRegistryToMatches(samples));
   });
 
   const [useDynamicAsdName, setUseDynamicAsdName] = useState<boolean>(() => {
@@ -109,6 +117,7 @@ export default function App() {
   const [isExportExcelOpen, setIsExportExcelOpen] = useState<boolean>(false);
   const [isBackupRestoreOpen, setIsBackupRestoreOpen] = useState<boolean>(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
+  const [changeStatusTargetMatches, setChangeStatusTargetMatches] = useState<Match[] | null>(null);
 
   // Auto-sync function: updates matches from Google Sheet link preserving sent status and dates
   const fetchAndSyncFromSheet = async (url: string) => {
@@ -139,14 +148,22 @@ export default function App() {
         csvContent = await directRes.text();
       }
 
-      const parsedMatches = parseRawText(csvContent, DEFAULT_COLUMN_MAPPING).filter(m => !isRiposoMatch(m));
-      if (parsedMatches.length === 0) {
+      const rawParsed = parseRawText(csvContent, DEFAULT_COLUMN_MAPPING).filter(m => !isRiposoMatch(m));
+      const parsedWithStatus = applyStatusRegistryToMatches(rawParsed);
+      if (parsedWithStatus.length === 0) {
         throw new Error('Nessuna gara valida trovata nel foglio.');
       }
 
       // USER REQUIREMENT: "quando si aggiornano i dati dal foglio google, le gare con le pec inviate non devono essere aggiornate, il flag di pec inviata deve restare"
       // USER REQUIREMENT: "da inserire un campo data invio da aggioanre con la data corrente per verificare l'effettivo invio della pec e non deve essere aggiornato se si ricaricano le gare."
-      setMatches(prev => mergeMatchesPreservingSent(prev, parsedMatches));
+      setMatches(prev => {
+        const merged = mergeMatchesPreservingSent(prev, parsedWithStatus);
+        const clean = deduplicateAndPreserveSentMatches(merged);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+        } catch {}
+        return clean;
+      });
 
       const nowStr = `${formatDateToGGMMMAAAA(new Date())} alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
       setLastSyncTime(nowStr);
@@ -311,61 +328,111 @@ export default function App() {
     );
   }, [matches]);
 
-  // Toggle match status (da_inviare <-> inviata)
-  // When setting to inviata: generates protocollo (AAAAMMGGHHMMSS) and sets pecSentDate
-  const handleToggleStatus = (id: string) => {
-    setMatches(prev =>
-      prev.map(m => {
-        if (m.id === id) {
-          const nextStatus = m.status === 'inviata' ? 'da_inviare' : 'inviata';
-          return {
-            ...m,
-            status: nextStatus,
-            pecSentDate: nextStatus === 'inviata' ? (m.pecSentDate || formatCurrentSendDate()) : undefined,
-            protocollo: nextStatus === 'inviata' ? (m.protocollo || generateProtocolloNumber()) : undefined,
-          };
-        }
-        return m;
-      })
-    );
-  };
+  // New procedure: Save and persist status from ChangeStatusModal (single or bulk)
+  const handleSaveStatus = (updatedMatches: Match[]) => {
+    const updatedMap = new Map(updatedMatches.map(m => [m.id, m]));
+    setMatches(prev => {
+      const next = prev.map(m => updatedMap.get(m.id) || m);
+      const clean = deduplicateAndPreserveSentMatches(next);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+      } catch {}
+      return clean;
+    });
 
-  // Update specific send date and protocollo
-  const handleUpdateSentDate = (id: string, newDate: string, newProtocollo?: string) => {
-    setMatches(prev =>
-      prev.map(m => {
-        if (m.id === id) {
-          return {
-            ...m,
-            status: 'inviata',
-            pecSentDate: newDate,
-            protocollo: newProtocollo || m.protocollo || generateProtocolloNumber(),
-          };
-        }
-        return m;
-      })
-    );
-    if (activePreviewMatch && activePreviewMatch.id === id) {
-      setActivePreviewMatch(prev =>
-        prev
-          ? {
-              ...prev,
-              status: 'inviata',
-              pecSentDate: newDate,
-              protocollo: newProtocollo || prev.protocollo || generateProtocolloNumber(),
-            }
-          : null
-      );
+    if (activePreviewMatch) {
+      const updatedPreview = updatedMap.get(activePreviewMatch.id);
+      if (updatedPreview) {
+        setActivePreviewMatch(updatedPreview);
+      }
     }
   };
 
-  // Update protocollo directly
+  // Toggle match status (da_inviare <-> inviata) with immediate persistent registry save
+  const handleToggleStatus = (id: string) => {
+    let targetUpdated: Match | null = null;
+    setMatches(prev => {
+      const next = prev.map(m => {
+        if (m.id === id) {
+          const nextStatus = m.status === 'inviata' ? 'da_inviare' : 'inviata';
+          const sentDate = nextStatus === 'inviata' ? (m.pecSentDate || formatCurrentSendDate()) : undefined;
+          const protocollo = nextStatus === 'inviata' ? (m.protocollo || generateProtocolloNumber()) : undefined;
+          const updated: Match = {
+            ...m,
+            status: nextStatus,
+            pecSentDate: sentDate,
+            protocollo: protocollo,
+          };
+          recordMatchStatusChange(updated, nextStatus, sentDate, protocollo);
+          targetUpdated = updated;
+          return updated;
+        }
+        return m;
+      });
+      const clean = deduplicateAndPreserveSentMatches(next);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+      } catch {}
+      return clean;
+    });
+
+    if (activePreviewMatch && activePreviewMatch.id === id && targetUpdated) {
+      setActivePreviewMatch(targetUpdated);
+    }
+  };
+
+  // Update specific send date and protocollo with immediate registry save
+  const handleUpdateSentDate = (id: string, newDate: string, newProtocollo?: string) => {
+    let targetUpdated: Match | null = null;
+    setMatches(prev => {
+      const next = prev.map(m => {
+        if (m.id === id) {
+          const prot = newProtocollo || m.protocollo || generateProtocolloNumber();
+          const updated: Match = {
+            ...m,
+            status: 'inviata',
+            pecSentDate: newDate,
+            protocollo: prot,
+          };
+          recordMatchStatusChange(updated, 'inviata', newDate, prot);
+          targetUpdated = updated;
+          return updated;
+        }
+        return m;
+      });
+      const clean = deduplicateAndPreserveSentMatches(next);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+      } catch {}
+      return clean;
+    });
+
+    if (activePreviewMatch && activePreviewMatch.id === id && targetUpdated) {
+      setActivePreviewMatch(targetUpdated);
+    }
+  };
+
+  // Update protocollo directly with immediate registry save
   const handleUpdateProtocollo = (id: string, newProtocollo: string) => {
-    setMatches(prev =>
-      prev.map(m => (m.id === id ? { ...m, protocollo: newProtocollo } : m))
-    );
-    if (activePreviewMatch && activePreviewMatch.id === id) {
-      setActivePreviewMatch(prev => (prev ? { ...prev, protocollo: newProtocollo } : null));
+    let targetUpdated: Match | null = null;
+    setMatches(prev => {
+      const next = prev.map(m => {
+        if (m.id === id) {
+          const updated: Match = { ...m, protocollo: newProtocollo };
+          recordMatchStatusChange(updated, updated.status, updated.pecSentDate, newProtocollo);
+          targetUpdated = updated;
+          return updated;
+        }
+        return m;
+      });
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    if (activePreviewMatch && activePreviewMatch.id === id && targetUpdated) {
+      setActivePreviewMatch(targetUpdated);
     }
   };
 
@@ -417,19 +484,27 @@ export default function App() {
     const defaultNowStr = formatCurrentSendDate();
     const dateToUse = sendDate?.trim() || defaultNowStr;
     let offsetSec = 0;
-    setMatches(prev =>
-      prev.map(m => {
+    setMatches(prev => {
+      const next = prev.map(m => {
         if (ids.includes(m.id)) {
-          return {
+          const prot = m.protocollo || generateProtocolloNumber(now, offsetSec++);
+          const updated: Match = {
             ...m,
             status: 'inviata',
             pecSentDate: dateToUse,
-            protocollo: m.protocollo || generateProtocolloNumber(now, offsetSec++),
+            protocollo: prot,
           };
+          recordMatchStatusChange(updated, 'inviata', dateToUse, prot);
+          return updated;
         }
         return m;
-      })
-    );
+      });
+      const clean = deduplicateAndPreserveSentMatches(next);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+      } catch {}
+      return clean;
+    });
   };
 
   // Toggle single selection
@@ -466,14 +541,27 @@ export default function App() {
   // Import new matches with safe merging and excluding RIPOSO
   const handleMatchesImported = (imported: Match[]) => {
     const valid = imported.filter(m => !isRiposoMatch(m));
-    setMatches(prev => mergeMatchesPreservingSent(prev, valid));
+    const withReg = applyStatusRegistryToMatches(valid);
+    setMatches(prev => {
+      const merged = mergeMatchesPreservingSent(prev, withReg);
+      const clean = deduplicateAndPreserveSentMatches(merged);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+      } catch {}
+      return clean;
+    });
     setSelectedMatchIds([]);
   };
 
-  // Reset to sample data (excluding RIPOSO)
+  // Reset to sample data (excluding RIPOSO) with status registry applied
   const handleLoadSampleData = () => {
-    setMatches(ensureUniqueMatchIds(SAMPLE_MATCHES).filter(m => !isRiposoMatch(m)));
+    const samples = ensureUniqueMatchIds(SAMPLE_MATCHES).filter(m => !isRiposoMatch(m));
+    const clean = deduplicateAndPreserveSentMatches(applyStatusRegistryToMatches(samples));
+    setMatches(clean);
     setSelectedMatchIds([]);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+    } catch {}
   };
 
   // Full Archive Restore Handler
@@ -488,11 +576,17 @@ export default function App() {
         ...m,
         category: resolveMatchCategory(m),
       }));
-    setMatches(cleanMatches);
+    const withReg = deduplicateAndPreserveSentMatches(applyStatusRegistryToMatches(cleanMatches));
+    withReg.forEach(m => {
+      if (m.status === 'inviata') {
+        recordMatchStatusChange(m, 'inviata', m.pecSentDate, m.protocollo, m.notes);
+      }
+    });
+    setMatches(withReg);
     setSelectedMatchIds([]);
 
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanMatches));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(withReg));
     } catch {}
 
     if (restoreSettings && newSettings) {
@@ -571,6 +665,7 @@ export default function App() {
         onDateRangeChange={setDateRange}
         onOpenExportExcel={() => setIsExportExcelOpen(true)}
         onDeleteSelected={() => setIsDeleteConfirmOpen(true)}
+        onChangeStatusSelected={() => setChangeStatusTargetMatches(matches.filter(m => selectedMatchIds.includes(m.id)))}
       />
 
       {/* Main Content Area */}
@@ -587,6 +682,15 @@ export default function App() {
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setChangeStatusTargetMatches(matches.filter(m => selectedMatchIds.includes(m.id)))}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors cursor-pointer text-xs shadow-xs"
+                title="Procedura per variare lo stato di tutte le gare selezionate"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Varia Stato ({selectedMatchIds.length})</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setIsBatchExportOpen(true)}
@@ -704,6 +808,7 @@ export default function App() {
                 onChangeFacility={() => setFacilityModalMatch(match)}
                 onUpdateSentDate={(newDate, newProt) => handleUpdateSentDate(match.id, newDate, newProt)}
                 onUpdateProtocollo={newProt => handleUpdateProtocollo(match.id, newProt)}
+                onChangeStatus={() => setChangeStatusTargetMatches([match])}
               />
             ))}
           </div>
@@ -762,6 +867,11 @@ export default function App() {
         useDynamicAsdName={useDynamicAsdName}
         onChangeFacility={() => setFacilityModalMatch(activePreviewMatch)}
         onUpdateSentDate={handleUpdateSentDate}
+        onChangeStatus={() => {
+          if (activePreviewMatch) {
+            setChangeStatusTargetMatches([activePreviewMatch]);
+          }
+        }}
       />
 
       <FacilityChangeModal
@@ -822,6 +932,14 @@ export default function App() {
         onClose={() => setIsDeleteConfirmOpen(false)}
         onConfirm={handleConfirmBulkDelete}
         selectedMatches={selectedMatchesToDelete}
+      />
+
+      <ChangeStatusModal
+        isOpen={Boolean(changeStatusTargetMatches)}
+        onClose={() => setChangeStatusTargetMatches(null)}
+        matches={changeStatusTargetMatches || []}
+        onSaveStatus={handleSaveStatus}
+        useDynamicAsdName={useDynamicAsdName}
       />
     </div>
   );

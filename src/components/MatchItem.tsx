@@ -19,7 +19,8 @@ import {
   CalendarCheck, 
   Edit2, 
   MoreVertical, 
-  FileCheck2 
+  FileCheck2,
+  ShieldCheck 
 } from 'lucide-react';
 import { Match } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
@@ -45,6 +46,7 @@ interface MatchItemProps {
   onChangeFacility: () => void;
   onUpdateSentDate?: (newDate: string, newProtocollo?: string) => void;
   onUpdateProtocollo?: (newProtocollo: string) => void;
+  onChangeStatus?: () => void;
 }
 
 export const MatchItem: React.FC<MatchItemProps> = ({
@@ -58,6 +60,7 @@ export const MatchItem: React.FC<MatchItemProps> = ({
   onChangeFacility,
   onUpdateSentDate,
   onUpdateProtocollo,
+  onChangeStatus,
 }) => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isEditingSentDate, setIsEditingSentDate] = useState<boolean>(false);
@@ -237,6 +240,22 @@ export const MatchItem: React.FC<MatchItemProps> = ({
               )}
             </button>
 
+            {/* Complete Status Management Button */}
+            {onChangeStatus && (
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  onChangeStatus();
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer shadow-2xs"
+                title="Procedura completa per variare stato, data invio e protocollo"
+              >
+                <Edit2 className="w-3 h-3 text-slate-500" />
+                <span>Varia Stato</span>
+              </button>
+            )}
+
             {/* Quick Floating Actions Menu Toggle */}
             <div className="relative">
               <button
@@ -261,6 +280,19 @@ export const MatchItem: React.FC<MatchItemProps> = ({
                     }} 
                   />
                   <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 text-xs">
+                    {onChangeStatus && (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          setShowQuickMenu(false);
+                          onChangeStatus();
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-blue-50 flex items-center gap-2 text-blue-700 font-semibold"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Varia Stato e Protocollo...</span>
+                      </button>
+                    )}
                     <button
                       onClick={e => {
                         e.stopPropagation();

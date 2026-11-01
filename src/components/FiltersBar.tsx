@@ -42,6 +42,7 @@ interface FiltersBarProps {
   onDateRangeChange: (val: DateRangeFilter) => void;
   onOpenExportExcel?: () => void;
   onDeleteSelected?: () => void;
+  onChangeStatusSelected?: () => void;
 }
 
 export const FiltersBar: React.FC<FiltersBarProps> = ({
@@ -67,6 +68,7 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
   onDateRangeChange,
   onOpenExportExcel,
   onDeleteSelected,
+  onChangeStatusSelected,
 }) => {
   const [showCustomDateInputs, setShowCustomDateInputs] = useState(dateRange.preset === 'CUSTOM');
 
@@ -314,6 +316,18 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
                     <span>Esporta Excel (CSV)</span>
+                  </button>
+                )}
+
+                {selectedMatchIds.length > 0 && onChangeStatusSelected && (
+                  <button
+                    type="button"
+                    onClick={onChangeStatusSelected}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-md bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition-colors cursor-pointer"
+                    title={`Varia lo stato per le ${selectedMatchIds.length} gare selezionate`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Varia Stato ({selectedMatchIds.length})</span>
                   </button>
                 )}
 

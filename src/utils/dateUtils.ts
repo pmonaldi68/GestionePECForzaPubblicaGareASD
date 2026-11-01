@@ -202,23 +202,41 @@ export function getMatchPriority(
   const diffMs = target.getTime() - today.getTime();
   const daysDiff = Math.round(diffMs / (1000 * 60 * 60 * 24));
 
+  // If match has already been sent, it is completed and never upcoming
+  if (status === 'inviata') {
+    return {
+      isUpcoming: false,
+      daysDiff,
+      label: 'PEC INVIATA',
+      shortBadge: 'Inviata',
+      urgency: 'none',
+      colorClasses: {
+        badge: 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold shadow-2xs',
+        icon: 'text-emerald-600',
+        border: 'border-l-4 border-l-emerald-500',
+        bgGlow: 'bg-emerald-50/20',
+        text: 'text-emerald-700',
+      },
+    };
+  }
+
   // Overdue: match date in the past (< 0 days)
   const isOverdue = daysDiff < 0;
 
   if (isOverdue) {
     const absDays = Math.abs(daysDiff);
     return {
-      isUpcoming: true,
+      isUpcoming: false, // Match has already been played in the past, not upcoming in the next 3 days
       daysDiff,
-      label: `DATA SUPERATA (${absDays} ${absDays === 1 ? 'giorno fa' : 'giorni fa'})`,
+      label: `GARA CONCLUSA (${absDays} ${absDays === 1 ? 'giorno fa' : 'giorni fa'})`,
       shortBadge: `${absDays} gg fa`,
-      urgency: 'critical',
+      urgency: 'none',
       colorClasses: {
-        badge: 'bg-red-100 text-red-900 border-red-300 font-bold shadow-2xs',
-        icon: 'text-red-600',
-        border: 'border-l-4 border-l-red-500',
-        bgGlow: 'bg-red-50/40',
-        text: 'text-red-700',
+        badge: 'bg-slate-100 text-slate-700 border-slate-300 font-medium',
+        icon: 'text-slate-500',
+        border: 'border-l-4 border-l-slate-300',
+        bgGlow: 'bg-slate-50/50',
+        text: 'text-slate-600',
       },
     };
   }
