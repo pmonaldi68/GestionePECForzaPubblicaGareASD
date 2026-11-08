@@ -619,15 +619,17 @@ export function downloadMatchPecPdf(match: Match, useDynamicAsdName: boolean = t
  */
 export function downloadConcatenatedPecPdf(
   matches: Match[],
-  useDynamicAsdName: boolean = true
+  useDynamicAsdName: boolean = true,
+  isSelection: boolean = false
 ): void {
   const homeMatches = matches.filter(m => m.isHome);
-  if (homeMatches.length === 0) return;
+  const targetMatches = homeMatches.length > 0 ? homeMatches : matches;
+  if (targetMatches.length === 0) return;
 
   const now = new Date();
   const nowStr = formatCurrentSendDate();
 
-  const preparedMatches: Match[] = homeMatches.map((m, idx) => ({
+  const preparedMatches: Match[] = targetMatches.map((m, idx) => ({
     ...m,
     status: 'inviata',
     pecSentDate: m.pecSentDate || nowStr,
@@ -636,11 +638,12 @@ export function downloadConcatenatedPecPdf(
 
   const doc = generateConcatenatedPecPdf(preparedMatches, useDynamicAsdName);
   const dateStr = new Date().toISOString().slice(0, 10);
-  const categories = Array.from(new Set(homeMatches.map(m => resolveMatchCategory(m))));
+  const categories = Array.from(new Set(targetMatches.map(m => resolveMatchCategory(m))));
   const catPrefix = categories.length === 1 
     ? `${categories[0].replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')}_` 
     : '';
-  const filename = `Attestazioni_PEC_${catPrefix}Tutte_Le_Gare_${dateStr}_(${homeMatches.length}_gare).pdf`;
+  const scopeLabel = isSelection ? 'Gare_Selezionate' : 'Tutte_Le_Gare';
+  const filename = `Attestazioni_PEC_Unite_${catPrefix}${scopeLabel}_${dateStr}_(${targetMatches.length}_gare).pdf`;
   doc.save(filename);
 }
 

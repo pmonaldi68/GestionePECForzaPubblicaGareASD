@@ -21,6 +21,7 @@ import {
   parseAndValidateBackup 
 } from '../utils/excelExport';
 import { mergeMatchesPreservingSent, ensureUniqueMatchIds } from '../utils/matchMerger';
+import { Cloud } from 'lucide-react';
 
 interface BackupRestoreModalProps {
   isOpen: boolean;
@@ -34,6 +35,7 @@ interface BackupRestoreModalProps {
     newSettings?: { useDynamicAsdName: boolean; sheetUrl: string; lastSyncTime: string | null },
     restoreSettings?: boolean
   ) => void;
+  onOpenDriveSync?: () => void;
 }
 
 export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
@@ -44,6 +46,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
   sheetUrl,
   lastSyncTime,
   onRestoreArchive,
+  onOpenDriveSync,
 }) => {
   const [activeTab, setActiveTab] = useState<'backup' | 'restore'>('backup');
   const [backupSuccessMessage, setBackupSuccessMessage] = useState<string | null>(null);
@@ -195,6 +198,35 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
 
         {/* Content */}
         <div className="p-6 space-y-5">
+          {/* Multi-Device Google Drive Callout */}
+          {onOpenDriveSync && (
+            <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/70 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
+                  <Cloud className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-blue-950">
+                    Vuoi usare l'app su un altro PC senza scaricare file?
+                  </h4>
+                  <p className="text-[11px] text-blue-700">
+                    Salva direttamente su Google Drive per riprendere il lavoro da qualsiasi dispositivo con un clic.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenDriveSync();
+                }}
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shrink-0 transition-colors cursor-pointer"
+              >
+                Apri Google Drive
+              </button>
+            </div>
+          )}
+
           {/* ========================================================================= */}
           {/* --- TAB 1: SALVATAGGIO / BACKUP LOCALE --- */}
           {/* ========================================================================= */}

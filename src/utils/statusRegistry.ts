@@ -3,6 +3,7 @@ import { normalizeToGGMMMAAAA, formatDateToGGMMMAAAA } from './dateUtils';
 import { formatCurrentSendDate, generateProtocolloNumber } from './matchMerger';
 
 export const STORAGE_STATUS_REGISTRY_KEY = 'asd_pec_status_registry_v2';
+export const STATUS_REGISTRY_STORAGE_KEY = STORAGE_STATUS_REGISTRY_KEY;
 
 export interface MatchStatusRecord {
   matchId: string;

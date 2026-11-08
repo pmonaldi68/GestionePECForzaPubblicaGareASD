@@ -1,4 +1,5 @@
-import { Shield, FileText, Upload, RefreshCw, Settings, Download, CheckCircle2, AlertCircle, FileSpreadsheet, Database } from 'lucide-react';
+import { Shield, FileText, Upload, RefreshCw, Settings, Download, CheckCircle2, AlertCircle, FileSpreadsheet, Database, Cloud } from 'lucide-react';
+import { User } from 'firebase/auth';
 import { Match } from '../types';
 
 interface HeaderProps {
@@ -11,6 +12,8 @@ interface HeaderProps {
   onDownloadAllPdfsZip?: () => void;
   onOpenExportExcel?: () => void;
   onOpenBackupRestore?: () => void;
+  user?: User | null;
+  onOpenDriveSync?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -23,6 +26,8 @@ export const Header: React.FC<HeaderProps> = ({
   onDownloadAllPdfsZip,
   onOpenExportExcel,
   onOpenBackupRestore,
+  user,
+  onOpenDriveSync,
 }) => {
   const homeMatches = matches.filter(m => m.isHome);
   const sentMatches = homeMatches.filter(m => m.status === 'inviata');
@@ -128,7 +133,25 @@ export const Header: React.FC<HeaderProps> = ({
                 title="Salva una copia di sicurezza su file locale o ripristina un backup precedente"
               >
                 <Database className="w-4 h-4 text-purple-600" />
-                <span>Backup & Ripristino</span>
+                <span>Backup Locale</span>
+              </button>
+            )}
+
+            {onOpenDriveSync && (
+              <button
+                onClick={onOpenDriveSync}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg border shadow-sm transition-colors cursor-pointer ${
+                  user
+                    ? 'border-blue-300 bg-blue-50 text-blue-900 hover:bg-blue-100'
+                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+                title="Sincronizza l'archivio con Google Drive per continuare a lavorare da un altro computer"
+              >
+                <Cloud className={`w-4 h-4 ${user ? 'text-blue-600' : 'text-slate-500'}`} />
+                <span>{user ? 'Google Drive Connesso' : 'Google Drive (Altro PC)'}</span>
+                {user && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Account Google collegato" />
+                )}
               </button>
             )}
 

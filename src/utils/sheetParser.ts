@@ -148,7 +148,7 @@ export function identifyClubFromCategory(campionatoOrCategory: string): ClubId |
 
 /**
  * Detects which club a match belongs to based on team names, category, or dedicated column.
- * Guarantees that Under 19 Provinciale belongs strictly to CYNTHIA 1920 (President: D'AURIA ANTONIO)
+ * Guarantees that Under 19 Provinciale belongs strictly to CYNTHIA 1920 (President: MENGHINI GABRIELE)
  * and opponents with "Academy" or "Don Bosco" are not misidentified as our home club.
  */
 export function detectClub(

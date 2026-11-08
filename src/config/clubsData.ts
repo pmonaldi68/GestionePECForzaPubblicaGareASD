@@ -7,7 +7,7 @@ export const CLUBS: Record<ClubId, ClubInfo> = {
     shortName: 'Cynthia 1920',
     primaryColor: '#0284c7', // Sky Blue
     badgeText: 'CYNTHIA 1920',
-    president: "D'AURIA ANTONIO",
+    president: 'MENGHINI GABRIELE',
     contactName: 'MONALDI PAOLO',
     contactPhone: '3289684700',
     aliases: ['CYNTHIA 1920', 'CYNTHIA', 'ASD CYNTHIA', 'CYNTHIA 1920 S.R.L.', 'CYNTHIA GENZANO'],

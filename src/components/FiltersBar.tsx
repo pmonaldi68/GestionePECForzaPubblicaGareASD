@@ -15,7 +15,8 @@ import {
   AlertCircle,
   FileSpreadsheet,
   Trash2,
-  Building2
+  Building2,
+  Printer
 } from 'lucide-react';
 import { ClubId, DateRangeFilter, DateRangePreset } from '../types';
 import { CLUBS } from '../config/clubsData';
@@ -45,6 +46,7 @@ interface FiltersBarProps {
   onDeleteSelected?: () => void;
   onChangeStatusSelected?: () => void;
   onChangeClubSelected?: () => void;
+  onExportSelectedMergedPdf?: () => void;
 }
 
 export const FiltersBar: React.FC<FiltersBarProps> = ({
@@ -72,6 +74,7 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
   onDeleteSelected,
   onChangeStatusSelected,
   onChangeClubSelected,
+  onExportSelectedMergedPdf,
 }) => {
   const [showCustomDateInputs, setShowCustomDateInputs] = useState(dateRange.preset === 'CUSTOM');
 
@@ -331,6 +334,18 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
                   >
                     <Building2 className="w-3.5 h-3.5" />
                     <span>Varia Società ({selectedMatchIds.length})</span>
+                  </button>
+                )}
+
+                {selectedMatchIds.length > 0 && onExportSelectedMergedPdf && (
+                  <button
+                    type="button"
+                    onClick={onExportSelectedMergedPdf}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-md bg-blue-600 hover:bg-blue-700 text-white shadow-2xs transition-colors cursor-pointer"
+                    title={`Esporta direttamente in un unico file PDF unito le ${selectedMatchIds.length} richieste PEC selezionate per la stampa rapida`}
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>PDF Unito ({selectedMatchIds.length})</span>
                   </button>
                 )}
 

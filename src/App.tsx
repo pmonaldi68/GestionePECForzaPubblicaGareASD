@@ -16,9 +16,12 @@ import { CalendarView } from './components/CalendarView';
 import { GoogleSheetSyncBar } from './components/GoogleSheetSyncBar';
 import { FacilityChangeModal } from './components/FacilityChangeModal';
 import { ChangeClubModal } from './components/ChangeClubModal';
-import { Calendar, AlertCircle, AlertTriangle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2, Trash2, Building2 } from 'lucide-react';
+import { GoogleDriveSyncModal } from './components/GoogleDriveSyncModal';
+import { User } from 'firebase/auth';
+import { initAuth } from './services/googleDriveService';
+import { Calendar, AlertCircle, AlertTriangle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2, Trash2, Building2, Printer } from 'lucide-react';
 import { downloadAllDraftsAsZip, resolveMatchCategory, resolveFacilityText } from './utils/pecGenerator';
-import { downloadAllPdfsAsZip } from './utils/pdfGenerator';
+import { downloadAllPdfsAsZip, downloadConcatenatedPecPdf } from './utils/pdfGenerator';
 import { getGoogleSheetsCsvUrl, parseRawText, DEFAULT_COLUMN_MAPPING, isRiposoMatch } from './utils/sheetParser';
 import { formatDateToGGMMMAAAA, parseMatchDate, getMatchPriority } from './utils/dateUtils';
 import { mergeMatchesPreservingSent, formatCurrentSendDate, generateProtocolloNumber, ensureUniqueMatchIds } from './utils/matchMerger';
@@ -35,7 +38,7 @@ const STORAGE_LAST_SYNC_KEY = 'asd_pec_last_sync_v1';
 
 /**
  * Ensures matches for categories like Under 19 Provinciale are strictly mapped
- * to CYNTHIA 1920 (President: D'AURIA ANTONIO) instead of Academy Cynthia.
+ * to CYNTHIA 1920 (President: MENGHINI GABRIELE) instead of Academy Cynthia.
  */
 function fixMisassignedClubCategories(matchList: Match[]): Match[] {
   return matchList.map(m => {
@@ -140,6 +143,17 @@ export default function App() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState<boolean>(false);
   const [changeStatusTargetMatches, setChangeStatusTargetMatches] = useState<Match[] | null>(null);
   const [changeClubTargetMatches, setChangeClubTargetMatches] = useState<Match[] | null>(null);
+  const [isDriveSyncModalOpen, setIsDriveSyncModalOpen] = useState<boolean>(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Initialize Firebase Auth listener for Google Drive Sync
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      user => setCurrentUser(user),
+      () => setCurrentUser(null)
+    );
+    return () => unsubscribe();
+  }, []);
 
   // Auto-sync function: updates matches from Google Sheet link preserving sent status and dates
   const fetchAndSyncFromSheet = async (url: string) => {
@@ -613,6 +627,13 @@ export default function App() {
     });
   };
 
+  // Export directly all selected matches into a single unified PDF file (1 match per page)
+  const handleExportSelectedMergedPdf = () => {
+    const selectedMatches = matches.filter(m => selectedMatchIds.includes(m.id));
+    if (selectedMatches.length === 0) return;
+    downloadConcatenatedPecPdf(selectedMatches, useDynamicAsdName, true);
+  };
+
   // Toggle single selection
   const handleToggleSelectMatch = (id: string) => {
     setSelectedMatchIds(prev =>
@@ -731,6 +752,8 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenExportExcel={() => setIsExportExcelOpen(true)}
         onOpenBackupRestore={() => setIsBackupRestoreOpen(true)}
+        user={currentUser}
+        onOpenDriveSync={() => setIsDriveSyncModalOpen(true)}
         onLoadSampleData={handleLoadSampleData}
         onDownloadAllZip={() => downloadAllDraftsAsZip(matches, useDynamicAsdName)}
         onDownloadAllPdfsZip={() => downloadAllPdfsAsZip(matches, useDynamicAsdName)}
@@ -773,6 +796,7 @@ export default function App() {
         onDeleteSelected={() => setIsDeleteConfirmOpen(true)}
         onChangeStatusSelected={() => setChangeStatusTargetMatches(matches.filter(m => selectedMatchIds.includes(m.id)))}
         onChangeClubSelected={() => setChangeClubTargetMatches(matches.filter(m => selectedMatchIds.includes(m.id)))}
+        onExportSelectedMergedPdf={handleExportSelectedMergedPdf}
       />
 
       {/* Main Content Area */}
@@ -789,6 +813,15 @@ export default function App() {
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleExportSelectedMergedPdf}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors cursor-pointer text-xs shadow-xs"
+                title="Esporta direttamente in un unico file PDF unito tutte le richieste PEC selezionate (1 pagina per gara) per la stampa rapida"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>PDF Unito ({selectedMatchIds.length})</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setChangeClubTargetMatches(matches.filter(m => selectedMatchIds.includes(m.id)))}
@@ -810,9 +843,9 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setIsBatchExportOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors cursor-pointer text-xs"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-colors cursor-pointer text-xs"
               >
-                Esporta / Stampa ({selectedMatchIds.length})
+                Altre Opzioni ({selectedMatchIds.length})
               </button>
               <button
                 type="button"
@@ -1047,6 +1080,19 @@ export default function App() {
         sheetUrl={sheetUrl}
         lastSyncTime={lastSyncTime}
         onRestoreArchive={handleRestoreArchive}
+        onOpenDriveSync={() => setIsDriveSyncModalOpen(true)}
+      />
+
+      <GoogleDriveSyncModal
+        isOpen={isDriveSyncModalOpen}
+        onClose={() => setIsDriveSyncModalOpen(false)}
+        user={currentUser}
+        onUserChange={setCurrentUser}
+        matches={matches}
+        useDynamicAsdName={useDynamicAsdName}
+        sheetUrl={sheetUrl}
+        lastSyncTime={lastSyncTime}
+        onRestoreFromDrive={handleRestoreArchive}
       />
 
       <ConfirmDeleteModal
