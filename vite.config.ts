@@ -1,6 +1,7 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import path from 'path';
 import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
@@ -13,8 +14,6 @@ export default defineConfig(() => {
         name: 'github-pages-404-fallback',
         closeBundle() {
           try {
-            const fs = require('fs');
-            const path = require('path');
             const distIndex = path.resolve(import.meta.dirname, 'dist', 'index.html');
             const dist404 = path.resolve(import.meta.dirname, 'dist', '404.html');
             if (fs.existsSync(distIndex)) {
@@ -68,6 +67,8 @@ export default defineConfig(() => {
       },
     },
     server: {
+      port: 3000,
+      host: '0.0.0.0',
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
