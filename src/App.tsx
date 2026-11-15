@@ -23,7 +23,7 @@ import { initAuth } from './services/googleDriveService';
 import { Calendar, AlertCircle, AlertTriangle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2, Trash2, Building2, Printer, ChevronDown, X } from 'lucide-react';
 import { downloadAllDraftsAsZip, resolveMatchCategory, resolveFacilityText } from './utils/pecGenerator';
 import { downloadAllPdfsAsZip, downloadConcatenatedPecPdf } from './utils/pdfGenerator';
-import { getGoogleSheetsCsvUrl, parseRawText, DEFAULT_COLUMN_MAPPING, isRiposoMatch } from './utils/sheetParser';
+import { fetchGoogleSheetCsv, parseRawText, DEFAULT_COLUMN_MAPPING, isRiposoMatch } from './utils/sheetParser';
 import { formatDateToGGMMMAAAA, parseMatchDate, getMatchPriority } from './utils/dateUtils';
 import { mergeMatchesPreservingSent, formatCurrentSendDate, generateProtocolloNumber, ensureUniqueMatchIds } from './utils/matchMerger';
 import { 
@@ -192,28 +192,7 @@ export default function App() {
     setIsSyncing(true);
     setSyncError(null);
     try {
-      const csvUrl = getGoogleSheetsCsvUrl(url);
-      if (!csvUrl) {
-        throw new Error('Link non riconosciuto come Foglio Google.');
-      }
-
-      let csvContent = '';
-      try {
-        const proxyRes = await fetch(`/api/fetch-sheet?url=${encodeURIComponent(csvUrl)}`);
-        if (proxyRes.ok) {
-          csvContent = await proxyRes.text();
-        }
-      } catch {
-        // Fallback
-      }
-
-      if (!csvContent) {
-        const directRes = await fetch(csvUrl);
-        if (!directRes.ok) {
-          throw new Error(`Errore HTTP ${directRes.status}. Verifica condivisione foglio.`);
-        }
-        csvContent = await directRes.text();
-      }
+      const csvContent = await fetchGoogleSheetCsv(url);
 
       const rawParsed = parseRawText(csvContent, DEFAULT_COLUMN_MAPPING).filter(m => !isRiposoMatch(m));
       const parsedWithStatus = applyStatusRegistryToMatches(rawParsed);

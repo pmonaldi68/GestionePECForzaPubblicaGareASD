@@ -130,8 +130,17 @@ export const GoogleDriveSyncModal: React.FC<GoogleDriveSyncModalProps> = ({
         setTimeout(() => setSuccessMessage(null), 3500);
       }
     } catch (err: any) {
+      const host = typeof window !== 'undefined' ? window.location.hostname : '';
       if (err?.code === 'auth/popup-closed-by-user') {
         setErrorMessage('Accesso annullato: la finestra di accesso Google è stata chiusa.');
+      } else if (err?.code === 'auth/popup-blocked') {
+        setErrorMessage('Il browser ha bloccato il popup di accesso Google. Consenti i popup per questo sito e riprova.');
+      } else if (err?.code === 'auth/cancelled-popup-request') {
+        setErrorMessage('Richiesta di accesso annullata perché era già aperta un\'altra finestra.');
+      } else if (err?.code === 'auth/unauthorized-domain') {
+        setErrorMessage(
+          `Dominio "${host}" non ancora autorizzato in Firebase Authentication. Aggiungi "${host}" tra i Domini autorizzati su Firebase Console (progetto gen-lang-client-0474127624) e tra le origini JavaScript autorizzate del Client OAuth.`
+        );
       } else {
         setErrorMessage(err?.message || 'Errore durante l\'accesso con Google.');
       }

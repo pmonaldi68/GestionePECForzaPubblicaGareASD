@@ -470,8 +470,17 @@ export function getGoogleSheetsCsvUrl(url: string): string | null {
     const trimmed = url.trim();
 
     // Direct CSV export link
-    if (trimmed.includes('output=csv') || trimmed.includes('format=csv')) {
+    if (trimmed.includes('output=csv') || trimmed.includes('format=csv') || trimmed.includes('tqx=out:csv')) {
       return trimmed;
+    }
+
+    // Published web link: /spreadsheets/d/e/{EXPORT_ID}/pubhtml
+    const pubMatch = trimmed.match(/\/spreadsheets\/d\/e\/([a-zA-Z0-9-_]+)/);
+    if (pubMatch && pubMatch[1]) {
+      const pubId = pubMatch[1];
+      const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
+      const gidParam = gidMatch ? `&gid=${gidMatch[1]}&single=true` : '';
+      return `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv${gidParam}`;
     }
 
     // Standard Google Sheet URL: https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/...
@@ -484,17 +493,94 @@ export function getGoogleSheetsCsvUrl(url: string): string | null {
       return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv${gidParam}`;
     }
 
-    // Published web link: /spreadsheets/d/e/{EXPORT_ID}/pubhtml
-    const pubMatch = trimmed.match(/\/spreadsheets\/d\/e\/([a-zA-Z0-9-_]+)/);
-    if (pubMatch && pubMatch[1]) {
-      const pubId = pubMatch[1];
-      return `https://docs.google.com/spreadsheets/d/e/${pubId}/pub?output=csv`;
-    }
-
     return null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Builds the Google Visualization API CSV URL which is often more permissive for client-side CORS on static sites (e.g. GitHub Pages).
+ */
+export function getGoogleSheetsGvizCsvUrl(url: string): string | null {
+  try {
+    const trimmed = url.trim();
+    if (/\/spreadsheets\/d\/e\//.test(trimmed)) {
+      return null;
+    }
+    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      const sheetId = match[1];
+      const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
+      const gidParam = gidMatch ? `&gid=${gidMatch[1]}` : '';
+      return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv${gidParam}`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function isHtmlPayload(text: string): boolean {
+  const sample = text.trim().slice(0, 200).toLowerCase();
+  return sample.startsWith('<!doctype') || sample.startsWith('<html') || sample.includes('<head>');
+}
+
+/**
+ * Fetches CSV content from a Google Sheet link cleanly on both local dev server (via /api/fetch-sheet)
+ * and static hosting like GitHub Pages (via CORS-enabled direct & gviz endpoints).
+ */
+export async function fetchGoogleSheetCsv(url: string): Promise<string> {
+  const csvUrl = getGoogleSheetsCsvUrl(url);
+  if (!csvUrl) {
+    throw new Error(
+      'Formato link non riconosciuto. Inserisci un link valido di Google Sheets (es. https://docs.google.com/spreadsheets/d/...)'
+    );
+  }
+
+  const gvizUrl = getGoogleSheetsGvizCsvUrl(url);
+  const isStaticGithubPages =
+    typeof window !== 'undefined' && window.location.hostname.endsWith('github.io');
+
+  // 1. In dev/Node server environments, try local proxy first (no CORS limits)
+  if (!isStaticGithubPages) {
+    try {
+      const proxyRes = await fetch(`/api/fetch-sheet?url=${encodeURIComponent(csvUrl)}`);
+      if (proxyRes.ok) {
+        const text = await proxyRes.text();
+        if (text.trim() && !isHtmlPayload(text)) {
+          return text;
+        }
+      }
+    } catch {
+      // Fall through to client-side fetch
+    }
+  }
+
+  // 2. Client-side fetch (GitHub Pages / static hosting): try gviz first, then export/pub CSV
+  const candidateUrls = Array.from(new Set([gvizUrl, csvUrl].filter((u): u is string => Boolean(u))));
+  let lastStatus: number | null = null;
+
+  for (const target of candidateUrls) {
+    try {
+      const directRes = await fetch(target, { mode: 'cors', credentials: 'omit' });
+      if (!directRes.ok) {
+        lastStatus = directRes.status;
+        continue;
+      }
+      const text = await directRes.text();
+      if (text.trim() && !isHtmlPayload(text)) {
+        return text;
+      }
+    } catch {
+      // Try next candidate
+    }
+  }
+
+  const statusSuffix = lastStatus ? ` (HTTP ${lastStatus})` : '';
+  throw new Error(
+    `Impossibile scaricare automaticamente il foglio Google${statusSuffix}. Su GitHub Pages il foglio deve essere condiviso come "Chiunque abbia il link può visualizzare" oppure pubblicato sul web (File > Condividi > Pubblica sul web > .csv). In alternativa usa "Copia e Incolla" o importa il file Excel/CSV.`
+  );
 }
 
 /**

@@ -14,10 +14,13 @@ export default defineConfig(() => {
         name: 'github-pages-404-fallback',
         closeBundle() {
           try {
-            const distIndex = path.resolve(import.meta.dirname, 'dist', 'index.html');
-            const dist404 = path.resolve(import.meta.dirname, 'dist', '404.html');
+            const distDir = path.resolve(import.meta.dirname, 'dist');
+            const distIndex = path.join(distDir, 'index.html');
+            const dist404 = path.join(distDir, '404.html');
+            const distNoJekyll = path.join(distDir, '.nojekyll');
             if (fs.existsSync(distIndex)) {
               fs.copyFileSync(distIndex, dist404);
+              fs.writeFileSync(distNoJekyll, '');
             }
           } catch {
             // ignore if not building dist

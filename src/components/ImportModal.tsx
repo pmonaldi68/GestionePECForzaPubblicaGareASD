@@ -16,7 +16,7 @@ import {
   DEFAULT_COLUMN_MAPPING, 
   parseRawText, 
   parseFileBuffer, 
-  getGoogleSheetsCsvUrl,
+  fetchGoogleSheetCsv,
   isRiposoMatch
 } from '../utils/sheetParser';
 import { SAMPLE_MATCHES } from '../data/sampleMatches';
@@ -60,33 +60,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
     setIsLoading(true);
 
     try {
-      const csvUrl = getGoogleSheetsCsvUrl(sheetUrl);
-      if (!csvUrl) {
-        throw new Error(
-          'Formato link non riconosciuto. Inserisci un link valido di Google Sheets (es. https://docs.google.com/spreadsheets/d/...)'
-        );
-      }
-
-      // Try fetching via local proxy first to avoid CORS issues
-      let csvContent = '';
-      try {
-        const proxyRes = await fetch(`/api/fetch-sheet?url=${encodeURIComponent(csvUrl)}`);
-        if (proxyRes.ok) {
-          csvContent = await proxyRes.text();
-        }
-      } catch {
-        // Fallback to direct client fetch
-      }
-
-      if (!csvContent) {
-        const directRes = await fetch(csvUrl);
-        if (!directRes.ok) {
-          throw new Error(
-            `Impossibile scaricare il foglio (Status ${directRes.status}). Assicurati che il foglio Google sia impostato su "Chiunque abbia il link può visualizzare" oppure usa la scheda "Copia e Incolla".`
-          );
-        }
-        csvContent = await directRes.text();
-      }
+      const csvContent = await fetchGoogleSheetCsv(sheetUrl);
 
       const matches = parseRawText(csvContent, mapping);
       if (matches.length === 0) {
