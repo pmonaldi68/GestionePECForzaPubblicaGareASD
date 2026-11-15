@@ -1,1 +1,179 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Plus Jakarta Sans", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ==========================================================================
+   GoogleChrome/modern-web-guidance Baseline Platform Defaults
+   ========================================================================== */
+:root {
+  color-scheme: light;
+  accent-color: #2563eb;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html {
+  font-family: var(--font-sans);
+  scrollbar-gutter: stable;
+  scrollbar-color: #cbd5e1 transparent;
+  background-color: #f8fafc;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background-color: #dbeafe;
+  color: #1e3a8a;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Accessible high-contrast keyboard focus rings */
+:where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* Container query scope for match cards */
+.match-card-container {
+  container-type: inline-size;
+}
+
+/* ==========================================================================
+   Top-Layer Native Popover Animations (@starting-style + allow-discrete)
+   Per GoogleChrome/modern-web-guidance: animate-to-from-top-layer
+   ========================================================================== */
+[popover].mwg-popover {
+  margin: 0;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+  transition:
+    opacity 160ms var(--ease-out-expo),
+    transform 160ms var(--ease-out-expo),
+    display 160ms allow-discrete,
+    overlay 160ms allow-discrete;
+}
+
+[popover].mwg-popover:is(:popover-open, .\:popover-open) {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@starting-style {
+  [popover].mwg-popover:is(:popover-open, .\:popover-open) {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+/* Modal Backdrop & Panel Entry Animations (@starting-style) */
+.modal-backdrop {
+  opacity: 1;
+  transition: opacity 180ms var(--ease-out-expo);
+}
+
+@starting-style {
+  .modal-backdrop {
+    opacity: 0;
+  }
+}
+
+.modal-panel {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 200ms var(--ease-out-expo),
+    transform 200ms var(--ease-out-expo);
+}
+
+@starting-style {
+  .modal-panel {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+
+/* Toast Notification Entry Animation */
+.toast-enter {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 180ms var(--ease-out-expo),
+    transform 180ms var(--ease-out-expo);
+}
+
+@starting-style {
+  .toast-enter {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* ==========================================================================
+   View Transitions API (same-document-transitions)
+   ========================================================================== */
+.workspace-transition-region {
+  view-transition-name: workspace-content;
+}
+
+::view-transition-old(workspace-content),
+::view-transition-new(workspace-content) {
+  animation-duration: 180ms;
+  animation-timing-function: var(--ease-out-expo);
+}
+
+/* Native <details> disclosure chevron rotation */
+details.mwg-details summary {
+  list-style: none;
+}
+
+details.mwg-details summary::-webkit-details-marker {
+  display: none;
+}
+
+details.mwg-details[open] .details-chevron {
+  transform: rotate(180deg);
+}
+
+/* Hide horizontal scrollbar cleanly where overflow tabs scroll */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Respect prefers-reduced-motion globally */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

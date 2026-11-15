@@ -23,9 +23,9 @@ export const ConfirmDeleteModal: React.FC<ConfirmDeleteModalProps> = ({
   const unsentMatches = selectedMatches.filter(m => m.status !== 'inviata');
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div 
-        className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200"
+    <div className="modal-backdrop fixed inset-0 z-50 overflow-y-auto bg-slate-900/55 backdrop-blur-xs flex items-center justify-center p-4">
+      <div
+        className="modal-panel bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200"
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-delete-title"

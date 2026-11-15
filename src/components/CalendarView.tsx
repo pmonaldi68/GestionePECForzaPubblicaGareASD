@@ -139,20 +139,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const weekDayNames = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       {/* Calendar Top Toolbar */}
-      <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-slate-50/70">
+      <div className="p-4 sm:px-6 sm:py-4 border-b border-slate-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-slate-50/60">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
-            <CalendarIcon className="w-5 h-5 text-amber-400" />
+          <div className="w-9 h-9 rounded-lg bg-slate-900 text-white flex items-center justify-center shrink-0">
+            <CalendarIcon className="w-4.5 h-4.5 text-amber-400" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-slate-900 capitalize tracking-tight">
+            <div className="flex items-baseline gap-2.5">
+              <h2 className="font-display text-lg font-bold text-slate-900 capitalize tracking-tight">
                 {monthName}
               </h2>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-700 font-semibold">
-                {matchesInCurrentMonth} {matchesInCurrentMonth === 1 ? 'gara' : 'gare'}
+              <span className="text-xs text-slate-500 font-medium tabular-nums">
+                · {matchesInCurrentMonth} {matchesInCurrentMonth === 1 ? 'gara' : 'gare'}
               </span>
             </div>
             <p className="text-xs text-slate-500">
@@ -164,12 +164,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         {/* Controls: Month Nav & View Switcher */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Subview Toggle */}
-          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1 text-xs">
+          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100/80 p-0.5 text-xs">
             <button
+              type="button"
               onClick={() => setSubView('month')}
-              className={`px-3 py-1.5 rounded-md font-semibold transition-colors flex items-center gap-1.5 ${
+              className={`h-7 px-3 rounded-md font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
                 subView === 'month'
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-white text-slate-900 shadow-2xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -177,10 +178,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               <span>Griglia Mese</span>
             </button>
             <button
+              type="button"
               onClick={() => setSubView('agenda')}
-              className={`px-3 py-1.5 rounded-md font-semibold transition-colors flex items-center gap-1.5 ${
+              className={`h-7 px-3 rounded-md font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
                 subView === 'agenda'
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-white text-slate-900 shadow-2xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -190,25 +192,30 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </div>
 
           {/* Month Step Buttons */}
-          <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
+          <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5">
             <button
+              type="button"
               onClick={prevMonth}
-              className="p-1.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+              className="p-1.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
               title="Mese precedente"
+              aria-label="Mese precedente"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={jumpToEarliest}
-              className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+              className="px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
               title="Torna alle gare in programma"
             >
               Oggi / Gare
             </button>
             <button
+              type="button"
               onClick={nextMonth}
-              className="p-1.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+              className="p-1.5 rounded-md text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
               title="Mese successivo"
+              aria-label="Mese successivo"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -217,26 +224,27 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       </div>
 
       {/* Clubs Color Legend */}
-      <div className="px-5 py-2.5 bg-white border-b border-slate-100 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
-        <span className="font-semibold text-slate-400 uppercase tracking-wider text-[10px]">
-          Legenda Società:
+      <div className="px-6 py-2.5 bg-white border-b border-slate-100 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+        <span className="font-medium text-slate-400">
+          Società:
         </span>
         {Object.values(CLUBS).map(club => (
           <div key={club.id} className="flex items-center gap-1.5 font-medium text-slate-700">
             <span
-              className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs"
+              className="w-2.5 h-2.5 rounded-xs shrink-0"
               style={{ backgroundColor: club.primaryColor }}
+              aria-hidden="true"
             />
             <span>{club.shortName}</span>
           </div>
         ))}
-        <div className="ml-auto hidden sm:flex items-center gap-3 text-[11px] text-slate-500">
+        <div className="ml-auto hidden sm:flex items-center gap-4 text-[11px] text-slate-500">
           <span className="flex items-center gap-1">
-            <Home className="w-3 h-3 text-amber-600" />
+            <Home className="w-3.5 h-3.5 text-amber-600" />
             <span>Gara in Casa (PEC)</span>
           </span>
           <span className="flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
             <span>PEC Inviata</span>
           </span>
         </div>
@@ -246,11 +254,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       {subView === 'month' && (
         <div className="p-3 sm:p-5">
           {/* Day of Week Headers */}
-          <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mb-2 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mb-2 text-center text-xs font-semibold text-slate-500">
             {weekDayNames.map((name, i) => (
               <div
                 key={name}
-                className={`py-1.5 rounded ${i >= 5 ? 'text-amber-800 bg-amber-50/50' : ''}`}
+                className={`py-1.5 rounded-md ${i >= 5 ? 'text-amber-800 bg-amber-50/60' : ''}`}
               >
                 {name}
               </div>
@@ -262,24 +270,23 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             {calendarGrid.map((dayItem, idx) => {
               const dayMatches = matchesByDate.get(dayItem.key) || [];
               const isWeekend = dayItem.date.getDay() === 0 || dayItem.date.getDay() === 6;
-              const isToday =
-                new Date().toISOString().slice(0, 10) === dayItem.key;
+              const isToday = new Date().toISOString().slice(0, 10) === dayItem.key;
 
               return (
                 <div
                   key={idx}
-                  className={`min-h-[110px] sm:min-h-[140px] p-1.5 sm:p-2 rounded-xl border flex flex-col justify-between transition-colors ${
+                  className={`min-h-[110px] sm:min-h-[136px] p-1.5 sm:p-2 rounded-xl border flex flex-col justify-between transition-colors ${
                     dayItem.isCurrentMonth
                       ? isWeekend
-                        ? 'bg-amber-50/20 border-amber-200/40'
-                        : 'bg-white border-slate-200/80'
-                      : 'bg-slate-50/60 border-slate-100 text-slate-400'
-                  } ${isToday ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''}`}
+                        ? 'bg-amber-50/20 border-amber-200/50'
+                        : 'bg-white border-slate-200'
+                      : 'bg-slate-50/70 border-slate-100 text-slate-400'
+                  } ${isToday ? 'ring-2 ring-blue-500/30 border-blue-400 bg-blue-50/15' : ''}`}
                 >
                   {/* Day Header */}
-                  <div className="flex items-center justify-between pb-1">
+                  <div className="flex items-center justify-between pb-1 tabular-nums">
                     <span
-                      className={`text-xs font-bold ${
+                      className={`text-xs font-semibold ${
                         dayItem.isCurrentMonth
                           ? isWeekend
                             ? 'text-amber-900'
@@ -291,8 +298,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     </span>
 
                     {dayMatches.length > 0 && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-slate-900 text-white leading-tight">
-                        {dayMatches.length}
+                      <span className="text-[11px] font-semibold text-slate-500">
+                        {dayMatches.length} {dayMatches.length === 1 ? 'gara' : 'gare'}
                       </span>
                     )}
                   </div>
@@ -303,50 +310,37 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       const club = CLUBS[m.clubId] || CLUBS.CYNTHIA_1920;
                       return (
                         <button
+                          type="button"
                           key={`${m.id}_${mIdx}`}
                           onClick={() => onSelectMatch(m)}
-                          className="w-full text-left p-1.5 rounded-lg border transition-all hover:scale-[1.02] hover:shadow-xs group cursor-pointer"
-                          style={{
-                            borderLeftWidth: '3.5px',
-                            borderLeftColor: club.primaryColor,
-                            backgroundColor: '#ffffff',
-                            borderColor: '#e2e8f0',
-                          }}
+                          className="w-full text-left p-1.5 rounded-lg border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70 transition-colors group cursor-pointer"
                           title={`${m.squadraCasa} vs ${m.squadraOspite} - Ore ${m.ora} - Clicca per PEC`}
                         >
-                          {/* Time & Badges */}
                           <div className="flex items-center justify-between gap-1 text-[10px]">
-                            <span className="font-bold text-slate-800 flex items-center gap-0.5">
-                              <Clock className="w-2.5 h-2.5 text-slate-400" />
-                              {m.ora}
+                            <span className="font-semibold text-slate-700 inline-flex items-center gap-1 tabular-nums">
+                              <span
+                                className="w-2 h-2 rounded-xs shrink-0"
+                                style={{ backgroundColor: club.primaryColor }}
+                                aria-hidden="true"
+                              />
+                              <span>{m.ora}</span>
                             </span>
 
                             <div className="flex items-center gap-1">
-                              {m.isHome ? (
-                                <span
-                                  className="text-[9px] font-bold px-1 py-0.2 rounded bg-amber-100 text-amber-800"
-                                  title="Gara in casa (PEC necessaria)"
-                                >
-                                  CASA
-                                </span>
-                              ) : (
-                                <span
-                                  className="text-[9px] font-medium px-1 py-0.2 rounded bg-slate-100 text-slate-600"
-                                  title="Gara in trasferta"
-                                >
-                                  TRASF
-                                </span>
-                              )}
+                              <span
+                                className={`text-[9px] font-semibold ${
+                                  m.isHome ? 'text-amber-700' : 'text-slate-400'
+                                }`}
+                              >
+                                {m.isHome ? 'Casa' : 'Trasf'}
+                              </span>
                               {m.status === 'inviata' && (
-                                <span title="PEC Inviata">
-                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                                </span>
+                                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
                               )}
                             </div>
                           </div>
 
-                          {/* Match Teams */}
-                          <div className="text-[11px] font-semibold text-slate-900 leading-tight truncate mt-0.5 group-hover:text-blue-600">
+                          <div className="text-[11px] font-semibold text-slate-900 leading-tight truncate mt-0.5 group-hover:text-blue-700">
                             {m.squadraCasa}
                           </div>
                           <div className="text-[10px] text-slate-500 leading-tight truncate">
@@ -373,12 +367,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               return (
                 <div key={group.dateKey} className="space-y-3">
                   {/* Date Heading */}
-                  <div className="flex items-center gap-2 pb-1 border-b border-slate-200">
-                    <div className="w-2 h-2 rounded-full bg-slate-900" />
-                    <h3 className="text-sm font-bold text-slate-900 capitalize">
+                  <div className="flex items-center gap-2 pb-1.5 border-b border-slate-200">
+                    <h3 className="font-display text-sm font-bold text-slate-900 capitalize">
                       {formattedDate}
                     </h3>
-                    <span className="text-xs text-slate-500 font-medium ml-auto">
+                    <span className="text-xs text-slate-500 font-medium ml-auto tabular-nums">
                       {group.matches.length} {group.matches.length === 1 ? 'partita' : 'partite'}
                     </span>
                   </div>
@@ -386,41 +379,35 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   {/* Matches on this date */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {group.matches.map((m, mIdx) => {
-                      const club = CLUBS[m.clubId];
+                      const club = CLUBS[m.clubId] || CLUBS.CYNTHIA_1920;
                       return (
                         <div
                           key={`${m.id}_${mIdx}`}
-                          className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-all flex flex-col justify-between shadow-xs"
-                          style={{
-                            borderLeftWidth: '4px',
-                            borderLeftColor: club.primaryColor,
-                          }}
+                          className="p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors flex flex-col justify-between"
                         >
                           <div>
-                            {/* Top info */}
-                            <div className="flex items-center justify-between text-xs pb-1.5">
-                              <span className="font-bold text-slate-700">
-                                {club.name}
+                            <div className="flex items-center justify-between text-xs pb-2">
+                              <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-xs shrink-0"
+                                  style={{ backgroundColor: club.primaryColor }}
+                                  aria-hidden="true"
+                                />
+                                <span>{club.name}</span>
                               </span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-semibold text-slate-800 flex items-center gap-1">
+                              <div className="flex items-center gap-2 tabular-nums">
+                                <span className="font-semibold text-slate-800 inline-flex items-center gap-1">
                                   <Clock className="w-3.5 h-3.5 text-slate-400" />
                                   {m.ora}
                                 </span>
-                                {m.isHome ? (
-                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                                    IN CASA
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                                    TRASFERTA
-                                  </span>
-                                )}
+                                <span className="text-slate-300">·</span>
+                                <span className={`font-semibold ${m.isHome ? 'text-amber-700' : 'text-slate-500'}`}>
+                                  {m.isHome ? 'In Casa' : 'Trasferta'}
+                                </span>
                               </div>
                             </div>
 
-                            {/* Teams */}
-                            <h4 className="text-sm font-bold text-slate-900">
+                            <h4 className="font-display text-sm font-bold text-slate-900">
                               {m.squadraCasa} vs {m.squadraOspite}
                             </h4>
 
@@ -428,31 +415,31 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                               {m.campionato} · Girone {m.girone} · {m.giornata}
                             </div>
 
-                            {/* Facility */}
-                            <div className="flex items-center gap-1.5 text-xs text-slate-600 mt-2 bg-slate-50 p-2 rounded-lg">
+                            <div className="flex items-center gap-1.5 text-xs text-slate-600 mt-2.5 pt-2.5 border-t border-slate-100">
                               <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                               <span className="truncate">{m.facilityText}</span>
                             </div>
                           </div>
 
-                          {/* Action Button */}
-                          <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                            <span className="text-xs">
+                          <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                            <span className="text-xs tabular-nums">
                               {m.status === 'inviata' ? (
-                                <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                                <span className="text-emerald-700 font-semibold inline-flex items-center gap-1">
                                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                                   <span>Inviata {m.protocollo ? `· Prot. ${m.protocollo}` : ''}</span>
                                 </span>
                               ) : (
-                                <span className="text-rose-700 font-semibold flex items-center gap-1">
-                                  <AlertCircle className="w-3.5 h-3.5" /> PEC Da Inviare
+                                <span className="text-rose-700 font-semibold inline-flex items-center gap-1">
+                                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                  <span>PEC Da Inviare</span>
                                 </span>
                               )}
                             </span>
 
                             <button
+                              type="button"
                               onClick={() => onSelectMatch(m)}
-                              className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-xs"
+                              className="inline-flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors cursor-pointer"
                             >
                               <Eye className="w-3.5 h-3.5" />
                               <span>Bozza PEC</span>

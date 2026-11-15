@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { Match, ClubId, DateRangeFilter } from './types';
 import { SAMPLE_MATCHES } from './data/sampleMatches';
 import { Header } from './components/Header';
@@ -19,7 +20,7 @@ import { ChangeClubModal } from './components/ChangeClubModal';
 import { GoogleDriveSyncModal } from './components/GoogleDriveSyncModal';
 import { User } from 'firebase/auth';
 import { initAuth } from './services/googleDriveService';
-import { Calendar, AlertCircle, AlertTriangle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2, Trash2, Building2, Printer } from 'lucide-react';
+import { Calendar, AlertCircle, AlertTriangle, Home, CheckSquare, Plus, FileSpreadsheet, EyeOff, CheckCircle2, Trash2, Building2, Printer, ChevronDown, X } from 'lucide-react';
 import { downloadAllDraftsAsZip, resolveMatchCategory, resolveFacilityText } from './utils/pecGenerator';
 import { downloadAllPdfsAsZip, downloadConcatenatedPecPdf } from './utils/pdfGenerator';
 import { getGoogleSheetsCsvUrl, parseRawText, DEFAULT_COLUMN_MAPPING, isRiposoMatch } from './utils/sheetParser';
@@ -145,6 +146,36 @@ export default function App() {
   const [changeClubTargetMatches, setChangeClubTargetMatches] = useState<Match[] | null>(null);
   const [isDriveSyncModalOpen, setIsDriveSyncModalOpen] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Non-intrusive Toast Notification State (GoogleChrome/modern-web-guidance)
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+
+  const showToast = useCallback((message: string) => {
+    setToastMessage(message);
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastMessage(null);
+    }, 3200);
+  }, []);
+
+  // View Transitions helper for smooth SPA view/filter changes
+  const runViewTransition = useCallback((update: () => void) => {
+    const doc = document as Document & {
+      startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+    };
+    if (!doc.startViewTransition) {
+      update();
+      return;
+    }
+    doc.startViewTransition(() => {
+      flushSync(() => {
+        update();
+      });
+    });
+  }, []);
 
   // Initialize Firebase Auth listener for Google Drive Sync
   useEffect(() => {
@@ -743,7 +774,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-900 font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
       {/* Header */}
       <Header
         matches={matches}
@@ -755,8 +786,16 @@ export default function App() {
         user={currentUser}
         onOpenDriveSync={() => setIsDriveSyncModalOpen(true)}
         onLoadSampleData={handleLoadSampleData}
-        onDownloadAllZip={() => downloadAllDraftsAsZip(matches, useDynamicAsdName)}
-        onDownloadAllPdfsZip={() => downloadAllPdfsAsZip(matches, useDynamicAsdName)}
+        onDownloadAllZip={() => {
+          downloadAllDraftsAsZip(matches, useDynamicAsdName);
+          showToast('Archivio bozze .TXT generato e scaricato');
+        }}
+        onDownloadAllPdfsZip={() => {
+          downloadAllPdfsAsZip(matches, useDynamicAsdName);
+          showToast('Archivio attestazioni PDF generato e scaricato');
+        }}
+        activeStatusFilter={statusFilter}
+        onQuickStatusFilter={status => runViewTransition(() => setStatusFilter(status))}
       />
 
       {/* Persistent Google Sheet Sync Bar */}
@@ -770,26 +809,26 @@ export default function App() {
         onClearUrl={handleClearUrl}
       />
 
-      {/* Filters Bar */}
+      {/* Sticky Filters Bar */}
       <FiltersBar
         selectedClub={selectedClub}
-        onSelectClub={setSelectedClub}
+        onSelectClub={club => runViewTransition(() => setSelectedClub(club))}
         onlyHomeMatches={onlyHomeMatches}
-        onToggleOnlyHome={setOnlyHomeMatches}
+        onToggleOnlyHome={val => runViewTransition(() => setOnlyHomeMatches(val))}
         selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
+        onSelectCategory={cat => runViewTransition(() => setSelectedCategory(cat))}
         availableCategories={availableCategories}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
+        onStatusFilterChange={status => runViewTransition(() => setStatusFilter(status))}
         totalFilteredCount={filteredMatches.length}
         totalSentCount={totalSentCount}
         selectedMatchIds={selectedMatchIds}
         onToggleSelectAll={handleToggleSelectAll}
         isAllSelected={isAllFilteredSelected}
         viewMode={viewMode}
-        onToggleViewMode={setViewMode}
+        onToggleViewMode={mode => runViewTransition(() => setViewMode(mode))}
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
         onOpenExportExcel={() => setIsExportExcelOpen(true)}
@@ -800,24 +839,27 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5">
         {/* Bulk Action Bar for Selected Matches in List View */}
         {selectedMatchIds.length > 0 && (
-          <div className="mb-4 bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-white shadow-md animate-in fade-in slide-in-from-top-1">
+          <div className="mb-4 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-white shadow-md modal-panel">
             <div className="flex items-center gap-3">
-              <span className="bg-blue-600 text-white font-bold px-2.5 py-1 rounded-lg text-xs">
+              <span className="font-display font-bold text-white tabular-nums">
                 {selectedMatchIds.length} {selectedMatchIds.length === 1 ? 'gara selezionata' : 'gare selezionate'}
               </span>
-              <p className="text-slate-300">
-                Azioni rapide per gli elementi selezionati nella lista delle gare.
-              </p>
+              <span className="hidden sm:inline text-slate-400">
+                Azioni rapide sulle gare spuntate
+              </span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={handleExportSelectedMergedPdf}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-colors cursor-pointer text-xs shadow-xs"
-                title="Esporta direttamente in un unico file PDF unito tutte le richieste PEC selezionate (1 pagina per gara) per la stampa rapida"
+                onClick={() => {
+                  handleExportSelectedMergedPdf();
+                  showToast(`PDF unico generato per ${selectedMatchIds.length} gare`);
+                }}
+                className="inline-flex items-center gap-1.5 h-8 px-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors cursor-pointer text-xs whitespace-nowrap shrink-0"
+                title="Esporta direttamente in un unico file PDF unito tutte le richieste PEC selezionate (1 pagina per gara)"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>PDF Unito ({selectedMatchIds.length})</span>
@@ -825,40 +867,40 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setChangeClubTargetMatches(matches.filter(m => selectedMatchIds.includes(m.id)))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors cursor-pointer text-xs shadow-xs"
+                className="inline-flex items-center gap-1.5 h-8 px-3 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-lg border border-slate-700 transition-colors cursor-pointer text-xs whitespace-nowrap shrink-0"
                 title="Varia la società, il presidente o la condizione casa/trasferta per le gare selezionate"
               >
-                <Building2 className="w-3.5 h-3.5" />
-                <span>Varia Società ({selectedMatchIds.length})</span>
+                <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                <span>Varia Società</span>
               </button>
               <button
                 type="button"
                 onClick={() => setChangeStatusTargetMatches(matches.filter(m => selectedMatchIds.includes(m.id)))}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition-colors cursor-pointer text-xs shadow-xs"
+                className="inline-flex items-center gap-1.5 h-8 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition-colors cursor-pointer text-xs whitespace-nowrap shrink-0"
                 title="Procedura per variare lo stato di tutte le gare selezionate"
               >
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Varia Stato ({selectedMatchIds.length})</span>
+                <span>Varia Stato</span>
               </button>
               <button
                 type="button"
                 onClick={() => setIsBatchExportOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-lg transition-colors cursor-pointer text-xs"
+                className="inline-flex items-center gap-1.5 h-8 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-lg border border-slate-700 transition-colors cursor-pointer text-xs whitespace-nowrap shrink-0"
               >
-                Altre Opzioni ({selectedMatchIds.length})
+                Altre Opzioni
               </button>
               <button
                 type="button"
                 onClick={() => setIsDeleteConfirmOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors cursor-pointer text-xs shadow-xs"
+                className="inline-flex items-center gap-1.5 h-8 px-3 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg transition-colors cursor-pointer text-xs whitespace-nowrap shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Elimina Selezionate ({selectedMatchIds.length})</span>
+                <span>Elimina ({selectedMatchIds.length})</span>
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedMatchIds([])}
-                className="px-2.5 py-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer text-xs"
+                className="h-8 px-2.5 text-slate-400 hover:text-white transition-colors cursor-pointer text-xs"
               >
                 Deseleziona
               </button>
@@ -868,146 +910,198 @@ export default function App() {
 
         {/* Urgent Upcoming Matches Alert Banner (Within next 3 days) */}
         {urgentUnsentMatches.length > 0 && statusFilter !== 'inviata' && (
-          <div className="mb-4 bg-rose-50 border border-rose-300 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-rose-950 shadow-xs">
-            <div className="flex items-center gap-2.5">
-              <span className="p-1.5 bg-rose-100 rounded-lg text-rose-700">
-                <AlertTriangle className="w-4 h-4 shrink-0" />
-              </span>
-              <div>
-                <strong className="font-bold text-rose-900">
-                  Priorità Alta Invio PEC: {urgentUnsentMatches.length} {urgentUnsentMatches.length === 1 ? 'partita casalinga' : 'partite casalinghe'} in programma entro i prossimi 3 giorni!
+          <div className="mb-3 bg-rose-50/90 border border-rose-200 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-rose-950">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+              <div className="min-w-0">
+                <strong className="font-semibold text-rose-950">
+                  Priorità invio PEC: {urgentUnsentMatches.length}{' '}
+                  {urgentUnsentMatches.length === 1 ? 'gara casalinga' : 'gare casalinghe'} entro 3 giorni
                 </strong>
-                <p className="text-rose-800/90 mt-0.5">
-                  Ai sensi dell'Art. 62 N.O.I.F., richiedi tempestivamente l'intervento della Forza Pubblica per garantire la regolarità delle gare.
-                </p>
+                <span className="text-rose-800 ml-1.5 hidden sm:inline">
+                  · Art. 62 N.O.I.F. (richiesta tempestiva Forza Pubblica)
+                </span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setSelectedMatchIds(urgentUnsentMatches.map(m => m.id));
-                }}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-semibold px-3 py-1.5 rounded-lg shadow-2xs transition-colors cursor-pointer text-xs"
-              >
-                Seleziona {urgentUnsentMatches.length} Gare Imminenti
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Startup Mode Notice (PEC Inviate Nascoste di Default) */}
-        {statusFilter === 'da_inviare' && totalSentCount > 0 && (
-          <div className="mb-4 bg-emerald-50/80 border border-emerald-200/90 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-emerald-950">
-            <div className="flex items-center gap-2">
-              <EyeOff className="w-4 h-4 text-emerald-700 shrink-0" />
-              <span>
-                <strong>Modalità operativa attiva:</strong> visualizzazione esclusiva delle PEC ancora <strong>Da Inviare</strong>. Le <strong>{totalSentCount} gare con PEC già inviata</strong> sono nascoste per facilitare il lavoro.
-              </span>
-            </div>
             <button
-              onClick={() => setStatusFilter('inviata')}
-              className="font-bold text-emerald-800 hover:text-emerald-950 underline shrink-0 cursor-pointer"
+              type="button"
+              onClick={() => setSelectedMatchIds(urgentUnsentMatches.map(m => m.id))}
+              className="h-7 px-3 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg transition-colors cursor-pointer text-xs whitespace-nowrap shrink-0"
             >
-              Mostra gare inviate ({totalSentCount})
+              Seleziona {urgentUnsentMatches.length} Imminenti
             </button>
           </div>
         )}
 
-        {/* Banner Informative Rules: Home Matches */}
-        {onlyHomeMatches && (
-          <div className="mb-4 bg-amber-50/80 border border-amber-200/90 rounded-xl p-3.5 flex items-start justify-between gap-3 text-xs text-amber-950">
-            <div className="flex items-start gap-2.5">
-              <Home className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-              <div>
-                <strong className="font-bold">Filtro attivo: Visualizzazione esclusiva Gare in Casa.</strong>
-                <p className="text-amber-900/90 mt-0.5 leading-relaxed">
-                  In osservanza dell'Art. 62/4-5 N.O.I.F., la società ospitante deve richiedere l'intervento della Forza Pubblica solo per le proprie gare interne.
-                  Le gare in trasferta sono temporaneamente nascoste.
-                </p>
+        {/* Unified Compact Operational Context Strip (Replaces stacked multi-banners per content-first-noise-reduction) */}
+        {(onlyHomeMatches || (statusFilter === 'da_inviare' && totalSentCount > 0)) && (
+          <div className="mb-4 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-600">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                {statusFilter === 'da_inviare' && totalSentCount > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-slate-700">
+                    <EyeOff className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>
+                      Visualizzazione operativa: <strong>Da Inviare</strong> ({totalSentCount} inviate nascoste)
+                    </span>
+                  </span>
+                )}
+                {statusFilter === 'da_inviare' && totalSentCount > 0 && onlyHomeMatches && (
+                  <span aria-hidden="true" className="text-slate-300">·</span>
+                )}
+                {onlyHomeMatches && (
+                  <span className="inline-flex items-center gap-1.5 text-slate-700">
+                    <Home className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>
+                      Filtro <strong>Solo Gare in Casa</strong> attivo
+                    </span>
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 shrink-0">
+                {statusFilter === 'da_inviare' && totalSentCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => runViewTransition(() => setStatusFilter('inviata'))}
+                    className="font-semibold text-emerald-700 hover:text-emerald-900 hover:underline underline-offset-2 cursor-pointer"
+                  >
+                    Mostra inviate ({totalSentCount})
+                  </button>
+                )}
+                {onlyHomeMatches && (
+                  <button
+                    type="button"
+                    onClick={() => runViewTransition(() => setOnlyHomeMatches(false))}
+                    className="font-semibold text-amber-800 hover:text-amber-950 hover:underline underline-offset-2 cursor-pointer"
+                  >
+                    Includi trasferte
+                  </button>
+                )}
+                {onlyHomeMatches && (
+                  <details className="mwg-details relative inline-block">
+                    <summary className="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800 font-medium cursor-pointer select-none">
+                      <span>Nota Art. 62 N.O.I.F.</span>
+                      <ChevronDown className="w-3 h-3 details-chevron transition-transform duration-150" />
+                    </summary>
+                    <div className="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-600 max-w-xl leading-relaxed">
+                      In osservanza dell'Art. 62 commi 4–5 N.O.I.F., la società ospitante deve richiedere l'intervento della Forza Pubblica esclusivamente per le proprie gare casalinghe.
+                    </div>
+                  </details>
+                )}
               </div>
             </div>
-            <button
-              onClick={() => setOnlyHomeMatches(false)}
-              className="text-amber-800 hover:text-amber-950 underline font-semibold shrink-0 cursor-pointer"
-            >
-              Mostra anche trasferte
-            </button>
           </div>
         )}
 
-        {/* Content: Calendar View vs List View */}
-        {viewMode === 'calendar' ? (
-          <CalendarView
-            matches={filteredMatches}
-            onSelectMatch={match => setActivePreviewMatch(match)}
-            selectedClub={selectedClub}
-          />
-        ) : filteredMatches.length > 0 ? (
-          <div className="space-y-3">
-            {filteredMatches.map((match, idx) => (
-              <MatchItem
-                key={`${match.id}_${idx}`}
-                match={match}
-                isSelected={selectedMatchIds.includes(match.id)}
-                onToggleSelect={() => handleToggleSelectMatch(match.id)}
-                onViewDetails={() => setActivePreviewMatch(match)}
-                onToggleStatus={() => handleToggleStatus(match.id)}
-                onToggleIsHome={() => handleToggleIsHome(match.id)}
-                useDynamicAsdName={useDynamicAsdName}
-                onChangeFacility={() => setFacilityModalMatch(match)}
-                onUpdateSentDate={(newDate, newProt) => handleUpdateSentDate(match.id, newDate, newProt)}
-                onUpdateProtocollo={newProt => handleUpdateProtocollo(match.id, newProt)}
-                onChangeStatus={() => setChangeStatusTargetMatches([match])}
-                onChangeClub={() => setChangeClubTargetMatches([match])}
-              />
-            ))}
-          </div>
-        ) : (
-          /* Empty State */
-          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center max-w-lg mx-auto my-8 shadow-xs">
-            <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-base font-bold text-slate-900">
-              Nessuna gara corrispondente ai filtri
-            </h3>
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              {statusFilter === 'da_inviare' && totalSentCount > 0
-                ? `Tutte le gare casalinghe risultano già inviate (${totalSentCount} inviate nascoste). Clicca su "Inviate" o "Tutte" per visualizzarle e scaricare le attestazioni PDF.`
-                : onlyHomeMatches
-                ? 'Non ci sono gare in casa con i filtri selezionati. Prova a disattivare il filtro "Solo Gare In Casa" o a reimpostare la ricerca.'
-                : 'Nessun risultato con i parametri selezionati.'}
-            </p>
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-              {statusFilter === 'da_inviare' && totalSentCount > 0 ? (
+        {/* Content: Calendar View vs List View (with View Transitions API container) */}
+        <div className="workspace-transition-region">
+          {viewMode === 'calendar' ? (
+            <CalendarView
+              matches={filteredMatches}
+              onSelectMatch={match => setActivePreviewMatch(match)}
+              selectedClub={selectedClub}
+            />
+          ) : filteredMatches.length > 0 ? (
+            <div className="space-y-3">
+              {filteredMatches.map((match, idx) => (
+                <MatchItem
+                  key={`${match.id}_${idx}`}
+                  match={match}
+                  isSelected={selectedMatchIds.includes(match.id)}
+                  onToggleSelect={() => handleToggleSelectMatch(match.id)}
+                  onViewDetails={() => setActivePreviewMatch(match)}
+                  onToggleStatus={() => {
+                    handleToggleStatus(match.id);
+                    showToast(
+                      match.status === 'inviata'
+                        ? 'Gara riportata a Da Inviare'
+                        : 'PEC contrassegnata come Inviata con data e protocollo'
+                    );
+                  }}
+                  onToggleIsHome={() => handleToggleIsHome(match.id)}
+                  useDynamicAsdName={useDynamicAsdName}
+                  onChangeFacility={() => setFacilityModalMatch(match)}
+                  onUpdateSentDate={(newDate, newProt) => handleUpdateSentDate(match.id, newDate, newProt)}
+                  onUpdateProtocollo={newProt => handleUpdateProtocollo(match.id, newProt)}
+                  onChangeStatus={() => setChangeStatusTargetMatches([match])}
+                  onChangeClub={() => setChangeClubTargetMatches([match])}
+                  onNotify={showToast}
+                />
+              ))}
+            </div>
+          ) : (
+            /* Empty State */
+            <div className="bg-white rounded-xl border border-slate-200 p-10 text-center max-w-lg mx-auto my-8">
+              <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <h3 className="font-display text-base font-bold text-slate-900">
+                Nessuna gara corrispondente ai filtri
+              </h3>
+              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                {statusFilter === 'da_inviare' && totalSentCount > 0
+                  ? `Tutte le gare casalinghe risultano già inviate (${totalSentCount} inviate nascoste). Passa alla scheda "Inviate" o "Tutte" per visualizzarle e scaricare le attestazioni PDF.`
+                  : onlyHomeMatches
+                  ? 'Non ci sono gare in casa con i filtri selezionati. Prova a includere le trasferte o a reimpostare la ricerca.'
+                  : 'Nessun risultato con i parametri selezionati.'}
+              </p>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                {statusFilter === 'da_inviare' && totalSentCount > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => runViewTransition(() => setStatusFilter('inviata'))}
+                    className="h-9 px-4 text-xs font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer"
+                  >
+                    Visualizza le {totalSentCount} Gare Inviate
+                  </button>
+                ) : null}
                 <button
-                  onClick={() => setStatusFilter('inviata')}
-                  className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 transition-colors cursor-pointer"
+                  type="button"
+                  onClick={() => {
+                    runViewTransition(() => {
+                      setSelectedClub('ALL');
+                      setOnlyHomeMatches(false);
+                      setSelectedCategory('ALL');
+                      setSearchQuery('');
+                      setStatusFilter('ALL');
+                      setDateRange({ preset: 'ALL' });
+                    });
+                  }}
+                  className="h-9 px-4 text-xs font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors cursor-pointer"
                 >
-                  Visualizza le {totalSentCount} Gare Inviate
+                  Reimposta Filtri
                 </button>
-              ) : null}
-              <button
-                onClick={() => {
-                  setSelectedClub('ALL');
-                  setOnlyHomeMatches(false);
-                  setSelectedCategory('ALL');
-                  setSearchQuery('');
-                  setStatusFilter('ALL');
-                  setDateRange({ preset: 'ALL' });
-                }}
-                className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                Reimposta tutti i filtri
-              </button>
-              <button
-                onClick={() => setIsImportModalOpen(true)}
-                className="px-3.5 py-2 text-xs font-semibold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-              >
-                Importa Nuovo Foglio
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="h-9 px-4 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                  Importa Foglio
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </main>
+
+      {/* Non-intrusive Toast Notification (GoogleChrome/modern-web-guidance) */}
+      {toastMessage && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="toast-enter fixed bottom-5 right-5 z-50 max-w-sm bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-lg border border-slate-800 flex items-center gap-2.5 text-xs font-medium"
+        >
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="flex-1">{toastMessage}</span>
+          <button
+            type="button"
+            onClick={() => setToastMessage(null)}
+            aria-label="Chiudi notifica"
+            className="text-slate-400 hover:text-white cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Modals */}
       <PecPreviewModal

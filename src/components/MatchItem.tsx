@@ -1,36 +1,34 @@
 import React, { useState } from 'react';
-import { 
-  Copy, 
-  Check, 
-  Download, 
-  Mail, 
-  Eye, 
-  Home, 
-  ArrowRight, 
-  MapPin, 
-  Calendar, 
-  Clock, 
-  Phone, 
-  UserCheck, 
-  CheckCircle2, 
-  AlertCircle, 
+import {
+  Copy,
+  Check,
+  Download,
+  Mail,
+  Eye,
+  Home,
+  MapPin,
+  Calendar,
+  Clock,
+  Phone,
+  UserCheck,
+  CheckCircle2,
+  AlertCircle,
   AlertTriangle,
-  FileText, 
-  CalendarCheck, 
-  Edit2, 
-  MoreVertical, 
+  CalendarCheck,
+  Edit2,
+  MoreVertical,
   FileCheck2,
   ShieldCheck,
-  Building2 
+  Building2
 } from 'lucide-react';
 import { Match } from '../types';
 import { CLUBS, COMMISSARIATO_INFO } from '../config/clubsData';
-import { 
-  generatePecForMatch, 
-  formatSeparatedFieldsTxt, 
-  downloadTextFile, 
+import {
+  generatePecForMatch,
+  formatSeparatedFieldsTxt,
+  downloadTextFile,
   createMailtoLink,
-  resolveMatchCategory 
+  resolveMatchCategory
 } from '../utils/pecGenerator';
 import { downloadMatchPecPdf } from '../utils/pdfGenerator';
 import { formatCurrentSendDate, generateProtocolloNumber } from '../utils/matchMerger';
@@ -49,6 +47,7 @@ interface MatchItemProps {
   onUpdateProtocollo?: (newProtocollo: string) => void;
   onChangeStatus?: () => void;
   onChangeClub?: () => void;
+  onNotify?: (message: string) => void;
 }
 
 export const MatchItem: React.FC<MatchItemProps> = ({
@@ -64,6 +63,7 @@ export const MatchItem: React.FC<MatchItemProps> = ({
   onUpdateProtocollo,
   onChangeStatus,
   onChangeClub,
+  onNotify,
 }) => {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isEditingSentDate, setIsEditingSentDate] = useState<boolean>(false);
@@ -75,30 +75,32 @@ export const MatchItem: React.FC<MatchItemProps> = ({
   const pec = generatePecForMatch(match, useDynamicAsdName);
   const priority = getMatchPriority(match.data, match.status);
 
-  const handleCopy = (text: string, fieldName: string, e: React.MouseEvent) => {
+  const handleCopy = (text: string, fieldName: string, label: string, e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(text);
     setCopiedField(fieldName);
+    onNotify?.(`${label} copiato negli appunti`);
     setTimeout(() => setCopiedField(null), 2000);
   };
 
   const handleDownloadTxt = (e: React.MouseEvent) => {
     e.stopPropagation();
     const content = formatSeparatedFieldsTxt(match, pec);
-    const safeCategory = resolveMatchCategory(match)
-      .replace(/[^a-zA-Z0-9]/g, '_')
-      .replace(/_+/g, '_')
-      .replace(/^_|_$/g, '') || 'GARA';
+    const safeCategory =
+      resolveMatchCategory(match)
+        .replace(/[^a-zA-Z0-9]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_|_$/g, '') || 'GARA';
     const safeDate = match.data.replace(/[^0-9]/g, '-');
     const safeHome = match.squadraCasa.replace(/[^a-zA-Z0-9]/g, '_');
     const safeAway = match.squadraOspite.replace(/[^a-zA-Z0-9]/g, '_');
     const filename = `Attestazione_PEC_${safeCategory}_${safeDate}_${safeHome}_vs_${safeAway}.txt`;
     downloadTextFile(filename, content);
+    onNotify?.(`File .TXT scaricato per ${match.squadraCasa} vs ${match.squadraOspite}`);
   };
 
   const handleDownloadPdf = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // If not yet sent, set current date and generate protocollo so the certificate has verified timestamp & protocol
     if (match.status !== 'inviata') {
       const now = formatCurrentSendDate();
       const prot = match.protocollo || generateProtocolloNumber();
@@ -106,12 +108,14 @@ export const MatchItem: React.FC<MatchItemProps> = ({
         onUpdateSentDate(now, prot);
       }
       downloadMatchPecPdf({ ...match, status: 'inviata', pecSentDate: now, protocollo: prot }, useDynamicAsdName);
+      onNotify?.(`PDF generato e gara contrassegnata come Inviata (Prot. ${prot})`);
     } else {
       const prot = match.protocollo || generateProtocolloNumber();
       if (!match.protocollo && onUpdateProtocollo) {
         onUpdateProtocollo(prot);
       }
       downloadMatchPecPdf({ ...match, protocollo: prot }, useDynamicAsdName);
+      onNotify?.(`Attestazione PDF scaricata (Prot. ${prot})`);
     }
   };
 
@@ -123,6 +127,7 @@ export const MatchItem: React.FC<MatchItemProps> = ({
       onUpdateSentDate(dateToSave, protToSave);
     }
     setIsEditingSentDate(false);
+    onNotify?.('Data invio e numero protocollo aggiornati');
   };
 
   const handleSetCurrentDateNow = (e: React.MouseEvent) => {
@@ -135,6 +140,7 @@ export const MatchItem: React.FC<MatchItemProps> = ({
       onUpdateSentDate(now, prot);
     }
     setIsEditingSentDate(false);
+    onNotify?.('Impostati data corrente e nuovo protocollo');
   };
 
   const mailtoLink = createMailtoLink(
@@ -144,30 +150,30 @@ export const MatchItem: React.FC<MatchItemProps> = ({
   );
 
   return (
-    <div
-      className={`border rounded-xl transition-all duration-150 relative ${
+    <article
+      className={`match-card-container rounded-xl border transition-colors duration-150 relative ${
         isSelected
-          ? 'border-blue-500 shadow-sm ring-1 ring-blue-500 bg-white'
+          ? 'border-blue-500 ring-2 ring-blue-500/15 bg-white'
           : match.status === 'inviata'
-          ? 'border-emerald-200/90 shadow-2xs bg-emerald-50/15'
+          ? 'border-emerald-200 bg-emerald-50/15 hover:border-emerald-300'
           : priority.isUpcoming
-          ? `border-amber-300 ${priority.colorClasses.border} ${priority.colorClasses.bgGlow} shadow-xs hover:border-amber-400`
-          : 'border-slate-200/90 hover:border-slate-300 shadow-xs bg-white'
+          ? 'border-amber-300 bg-amber-50/20 hover:border-amber-400'
+          : 'border-slate-200 bg-white hover:border-slate-300'
       }`}
     >
-      <div className="p-4 sm:p-5">
-        {/* Top Header Row */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2.5">
-            {/* Selection Checkbox */}
+      <div className="p-4 sm:px-5 sm:py-4">
+        {/* Top Metadata & State Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
+          {/* Left: Checkbox + Unboxed Club & Category Metadata */}
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
             <input
               type="checkbox"
               checked={isSelected}
               onChange={onToggleSelect}
-              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer"
+              aria-label={`Seleziona gara ${match.squadraCasa} vs ${match.squadraOspite}`}
+              className="w-4 h-4 rounded border-slate-300 cursor-pointer shrink-0"
             />
 
-            {/* Club Pill (Clickable to change club & president) */}
             {onChangeClub ? (
               <button
                 type="button"
@@ -175,110 +181,97 @@ export const MatchItem: React.FC<MatchItemProps> = ({
                   e.stopPropagation();
                   onChangeClub();
                 }}
-                className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 hover:text-blue-700 bg-slate-50 hover:bg-blue-50/80 px-2 py-0.5 rounded-lg border border-slate-200/80 transition-colors cursor-pointer group"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-900 hover:text-blue-700 transition-colors cursor-pointer group"
                 title="Clicca per variare società, presidente o condizione casa/trasferta"
               >
                 <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0 group-hover:scale-110 transition-transform"
+                  className="w-2.5 h-2.5 rounded-xs shrink-0"
                   style={{ backgroundColor: club.primaryColor }}
+                  aria-hidden="true"
                 />
                 <span className="group-hover:underline underline-offset-2">{club.name}</span>
-                <Building2 className="w-3 h-3 text-slate-400 group-hover:text-blue-600 ml-0.5" />
+                <Building2 className="w-3 h-3 text-slate-400 group-hover:text-blue-600 transition-colors" />
               </button>
             ) : (
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-900">
                 <span
-                  className="w-2.5 h-2.5 rounded-full"
+                  className="w-2.5 h-2.5 rounded-xs shrink-0"
                   style={{ backgroundColor: club.primaryColor }}
+                  aria-hidden="true"
                 />
                 <span>{club.name}</span>
-              </div>
+              </span>
             )}
 
-            <span className="text-slate-300 text-xs">/</span>
+            <span aria-hidden="true" className="text-slate-300 text-xs">·</span>
 
-            {/* Category / Campionato text */}
-            <span className="text-xs font-medium text-slate-600">
+            <span className="text-xs font-medium text-slate-600 truncate">
               {match.category || match.campionato}
             </span>
+
+            {priority.isUpcoming && match.status !== 'inviata' && (
+              <>
+                <span aria-hidden="true" className="text-slate-300 text-xs">·</span>
+                <span
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800"
+                  title={`Partita entro 3 giorni: ${priority.label}`}
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>{priority.label}</span>
+                </span>
+              </>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Visual Priority Badge: next to match if date is within 3 days */}
-            {priority.isUpcoming && (
-              <div
-                className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 rounded-md border ${priority.colorClasses.badge}`}
-                title={`Partita prossima (entro i prossimi 3 giorni): ${priority.label}. Inviare la richiesta PEC di Forza Pubblica tempestivamente ai sensi dell'Art. 62 N.O.I.F.`}
-              >
-                <AlertTriangle className={`w-3.5 h-3.5 ${priority.colorClasses.icon} shrink-0`} />
-                <span>
-                  {match.status === 'inviata'
-                    ? `Gara ${priority.shortBadge} (Inviata)`
-                    : priority.label}
-                </span>
-              </div>
-            )}
-
-            {/* Home / Away Badge with click toggle */}
+          {/* Right: Interactive State Controls */}
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
             <button
+              type="button"
               onClick={e => {
                 e.stopPropagation();
                 onToggleIsHome();
               }}
               title="Clicca per invertire Casa / Trasferta"
-              className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1 h-7 px-2 text-[11px] font-semibold rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 match.isHome
                   ? 'bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100'
-                  : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
               }`}
             >
-              <Home className="w-3 h-3 text-amber-700" />
-              <span>{match.isHome ? 'IN CASA' : 'TRASFERTA'}</span>
+              <Home className={`w-3 h-3 ${match.isHome ? 'text-amber-600' : 'text-slate-400'}`} />
+              <span>{match.isHome ? 'In Casa' : 'Trasferta'}</span>
             </button>
 
-            {/* Quick Club & President Change Button */}
-            {onChangeClub && (
-              <button
-                type="button"
-                onClick={e => {
-                  e.stopPropagation();
-                  onChangeClub();
-                }}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-900 transition-colors cursor-pointer shadow-2xs"
-                title="Varia velocemente società, presidente o tipo di gara"
-              >
-                <Building2 className="w-3 h-3 text-indigo-600" />
-                <span>Varia Società</span>
-              </button>
-            )}
-
-            {/* Status Button (Toggle Sent / Da Inviare) */}
             <button
+              type="button"
               onClick={e => {
                 e.stopPropagation();
                 onToggleStatus();
               }}
-              className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+              className={`inline-flex items-center gap-1 h-7 px-2.5 text-[11px] font-semibold rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 match.status === 'inviata'
-                  ? 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200 shadow-2xs'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                   : 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100'
               }`}
-              title={match.status === 'inviata' ? 'PEC contrassegnata come inviata. Clicca per cambiare stato.' : 'Clicca per registrare l’invio con la data corrente.'}
+              title={
+                match.status === 'inviata'
+                  ? 'PEC contrassegnata come inviata. Clicca per variare stato.'
+                  : 'Clicca per registrare l’invio PEC con la data corrente.'
+              }
             >
               {match.status === 'inviata' ? (
                 <>
-                  <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
                   <span>PEC Inviata</span>
                 </>
               ) : (
                 <>
-                  <AlertCircle className="w-3 h-3 text-rose-600" />
+                  <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" />
                   <span>Da Inviare</span>
                 </>
               )}
             </button>
 
-            {/* Complete Status Management Button */}
             {onChangeStatus && (
               <button
                 type="button"
@@ -286,106 +279,117 @@ export const MatchItem: React.FC<MatchItemProps> = ({
                   e.stopPropagation();
                   onChangeStatus();
                 }}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer shadow-2xs"
-                title="Procedura completa per variare stato, data invio e protocollo"
+                className="inline-flex items-center gap-1 h-7 px-2 text-[11px] font-medium rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                title="Modifica stato, data invio, protocollo e note"
               >
-                <Edit2 className="w-3 h-3 text-slate-500" />
-                <span>Varia Stato</span>
+                <Edit2 className="w-3 h-3 text-slate-400" />
+                <span className="hidden sm:inline">Varia Stato</span>
               </button>
             )}
 
-            {/* Quick Floating Actions Menu Toggle */}
+            {/* Quick Overflow Actions Menu */}
             <div className="relative">
               <button
                 type="button"
                 onClick={e => {
                   e.stopPropagation();
-                  setShowQuickMenu(!showQuickMenu);
+                  setShowQuickMenu(prev => !prev);
                 }}
-                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
-                title="Azioni veloci"
+                aria-label="Altre azioni gara"
+                aria-expanded={showQuickMenu}
+                className="inline-flex items-center justify-center w-7 h-7 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+                title="Altre azioni"
               >
                 <MoreVertical className="w-4 h-4" />
               </button>
 
               {showQuickMenu && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-20" 
+                  <div
+                    className="fixed inset-0 z-20"
                     onClick={e => {
                       e.stopPropagation();
                       setShowQuickMenu(false);
-                    }} 
+                    }}
                   />
-                  <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 text-xs">
+                  <div className="modal-panel absolute right-0 top-full mt-1.5 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-30 text-xs">
                     {onChangeClub && (
                       <button
+                        type="button"
                         onClick={e => {
                           e.stopPropagation();
                           setShowQuickMenu(false);
                           onChangeClub();
                         }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-indigo-50 flex items-center gap-2 text-indigo-700 font-semibold"
+                        className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-800 font-medium cursor-pointer"
                       >
-                        <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                        <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                         <span>Varia Società e Presidente...</span>
                       </button>
                     )}
                     {onChangeStatus && (
                       <button
+                        type="button"
                         onClick={e => {
                           e.stopPropagation();
                           setShowQuickMenu(false);
                           onChangeStatus();
                         }}
-                        className="w-full text-left px-3 py-1.5 hover:bg-blue-50 flex items-center gap-2 text-blue-700 font-semibold"
+                        className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-800 font-medium cursor-pointer"
                       >
-                        <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                         <span>Varia Stato e Protocollo...</span>
                       </button>
                     )}
                     <button
+                      type="button"
                       onClick={e => {
                         e.stopPropagation();
                         setShowQuickMenu(false);
                         onToggleStatus();
                       }}
-                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-slate-700"
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>{match.status === 'inviata' ? 'Segna come Da Inviare' : 'Segna PEC Inviata Oggi'}</span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>
+                        {match.status === 'inviata' ? 'Segna come Da Inviare' : 'Segna PEC Inviata Oggi'}
+                      </span>
                     </button>
                     <button
+                      type="button"
                       onClick={e => {
                         e.stopPropagation();
                         setShowQuickMenu(false);
                         onChangeFacility();
                       }}
-                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-slate-700"
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
                     >
-                      <MapPin className="w-3.5 h-3.5 text-amber-600" />
+                      <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       <span>Cambia Campo di Gioco</span>
                     </button>
+                    <div className="my-1 border-t border-slate-100" />
                     <button
+                      type="button"
                       onClick={e => {
                         e.stopPropagation();
                         setShowQuickMenu(false);
                         handleDownloadPdf(e);
                       }}
-                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-blue-700 font-semibold"
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-rose-700 font-medium cursor-pointer"
                     >
-                      <FileCheck2 className="w-3.5 h-3.5 text-blue-600" />
+                      <FileCheck2 className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                       <span>Scarica Attestazione PDF</span>
                     </button>
                     <button
+                      type="button"
                       onClick={e => {
                         e.stopPropagation();
                         setShowQuickMenu(false);
                         handleDownloadTxt(e);
                       }}
-                      className="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-slate-700"
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 cursor-pointer"
                     >
-                      <Download className="w-3.5 h-3.5 text-slate-500" />
+                      <Download className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                       <span>Salva File .TXT</span>
                     </button>
                   </div>
@@ -395,22 +399,29 @@ export const MatchItem: React.FC<MatchItemProps> = ({
           </div>
         </div>
 
-        {/* Center: Match Teams, Championship & Date */}
-        <div className="py-3.5 grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-          {/* Teams */}
-          <div className="md:col-span-7">
-            <div className="flex items-center gap-2">
-              <span className={`text-base font-bold tracking-tight ${match.isHome ? 'text-slate-900' : 'text-slate-700'}`}>
+        {/* Center Match Grid: Teams & Schedule */}
+        <div className="py-3.5 grid grid-cols-1 md:grid-cols-12 gap-3 items-start md:items-center">
+          {/* Teams & Sent Telemetry */}
+          <div className="md:col-span-7 space-y-1.5 min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span
+                className={`font-display text-base sm:text-[17px] tracking-tight ${
+                  match.isHome ? 'font-bold text-slate-900' : 'font-semibold text-slate-700'
+                }`}
+              >
                 {match.squadraCasa}
               </span>
-              <span className="text-slate-400 font-medium text-xs">vs</span>
-              <span className={`text-base font-semibold ${!match.isHome ? 'text-slate-900' : 'text-slate-600'}`}>
+              <span className="text-slate-400 font-normal text-xs">vs</span>
+              <span
+                className={`font-display text-base sm:text-[17px] tracking-tight ${
+                  !match.isHome ? 'font-bold text-slate-900' : 'font-medium text-slate-600'
+                }`}
+              >
                 {match.squadraOspite}
               </span>
             </div>
 
-            {/* Metadata in unboxed text */}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500 mt-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
               <span>{match.campionato}</span>
               <span aria-hidden="true" className="text-slate-300">·</span>
               <span>Girone {match.girone}</span>
@@ -418,66 +429,69 @@ export const MatchItem: React.FC<MatchItemProps> = ({
               <span>{match.giornata}</span>
             </div>
 
-            {/* SEND DATE & PROTOCOLLO FIELD */}
-            <div className="mt-2.5">
+            {/* Sent Date & Protocollo Strip */}
+            <div className="pt-1">
               {match.status === 'inviata' ? (
-                <div className="inline-flex flex-wrap items-center gap-2 bg-emerald-50/90 border border-emerald-200/90 rounded-lg px-2.5 py-1 text-xs">
-                  {/* Data Invio */}
-                  <div className="flex items-center gap-1.5">
+                <div className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 bg-emerald-50/80 border border-emerald-200 rounded-lg px-2.5 py-1.5 text-xs">
+                  <div className="inline-flex items-center gap-1.5 tabular-nums">
                     <CalendarCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                    <span className="font-semibold text-emerald-900">Data Invio:</span>
-                    <span className="font-medium text-emerald-800">
+                    <span className="font-medium text-emerald-900">Inviata:</span>
+                    <span className="font-semibold text-emerald-800">
                       {match.pecSentDate || 'Data registrata'}
                     </span>
                   </div>
 
-                  <span className="text-emerald-300">·</span>
+                  <span aria-hidden="true" className="text-emerald-300">·</span>
 
-                  {/* Protocollo AAAAMMGGHHMMSS */}
-                  <div className="flex items-center gap-1">
-                    <FileCheck2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                    <span className="font-semibold text-emerald-900">Protocollo N.:</span>
-                    <span className="font-mono font-bold text-emerald-950 bg-white/90 px-1.5 py-0.5 rounded border border-emerald-300 text-[11px] tracking-wider">
+                  <div className="inline-flex items-center gap-1.5">
+                    <span className="font-medium text-emerald-900">Prot.</span>
+                    <code className="font-mono font-semibold text-emerald-950 bg-white px-1.5 py-0.5 rounded border border-emerald-200 text-[11px] tabular-nums">
                       {match.protocollo || 'Non generato'}
-                    </span>
+                    </code>
                     {match.protocollo && (
                       <button
-                        onClick={e => handleCopy(match.protocollo!, 'protocollo', e)}
+                        type="button"
+                        onClick={e => handleCopy(match.protocollo!, 'protocollo', 'Protocollo', e)}
                         className="text-emerald-700 hover:text-emerald-950 p-0.5 rounded cursor-pointer"
                         title="Copia numero protocollo"
+                        aria-label="Copia numero protocollo"
                       >
                         {copiedField === 'protocollo' ? (
-                          <Check className="w-3 h-3 text-emerald-700" />
+                          <Check className="w-3.5 h-3.5 text-emerald-700" />
                         ) : (
-                          <Copy className="w-3 h-3 text-emerald-600" />
+                          <Copy className="w-3.5 h-3.5 text-emerald-600" />
                         )}
                       </button>
                     )}
                   </div>
-                  
+
                   {!isEditingSentDate ? (
                     <button
+                      type="button"
                       onClick={e => {
                         e.stopPropagation();
                         setCustomSentDate(match.pecSentDate || formatCurrentSendDate());
                         setCustomProtocollo(match.protocollo || generateProtocolloNumber());
                         setIsEditingSentDate(true);
                       }}
-                      className="ml-1 text-[10px] font-semibold text-emerald-700 hover:text-emerald-950 underline inline-flex items-center gap-0.5 cursor-pointer"
+                      className="text-[11px] font-semibold text-emerald-800 hover:text-emerald-950 underline underline-offset-2 inline-flex items-center gap-0.5 cursor-pointer"
                       title="Modifica data e protocollo"
                     >
-                      <Edit2 className="w-2.5 h-2.5" />
                       <span>Modifica</span>
                     </button>
                   ) : (
-                    <form onSubmit={handleSaveSentDate} className="inline-flex flex-wrap items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
+                    <form
+                      onSubmit={handleSaveSentDate}
+                      className="inline-flex flex-wrap items-center gap-1"
+                      onClick={e => e.stopPropagation()}
+                    >
                       <input
                         type="text"
                         value={customSentDate}
                         onChange={e => setCustomSentDate(e.target.value)}
                         placeholder="GG/MM/AAAA alle OO:MM"
                         title="Data e ora invio"
-                        className="bg-white border border-emerald-300 text-slate-800 px-1.5 py-0.5 rounded text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        className="bg-white border border-emerald-300 text-slate-900 px-1.5 py-0.5 rounded text-[11px] font-mono"
                       />
                       <input
                         type="text"
@@ -485,19 +499,18 @@ export const MatchItem: React.FC<MatchItemProps> = ({
                         onChange={e => setCustomProtocollo(e.target.value)}
                         placeholder="AAAAMMGGHHMMSS"
                         title="Numero protocollo"
-                        className="bg-white border border-emerald-300 text-slate-800 px-1.5 py-0.5 rounded text-[11px] font-mono w-36 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                        className="bg-white border border-emerald-300 text-slate-900 px-1.5 py-0.5 rounded text-[11px] font-mono w-32"
                       />
                       <button
                         type="submit"
-                        className="bg-emerald-600 text-white px-1.5 py-0.5 rounded text-[10px] font-semibold hover:bg-emerald-700 cursor-pointer"
+                        className="bg-emerald-600 text-white px-2 py-0.5 rounded text-[11px] font-semibold hover:bg-emerald-700 cursor-pointer"
                       >
                         Salva
                       </button>
                       <button
                         type="button"
                         onClick={handleSetCurrentDateNow}
-                        className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[10px] font-semibold hover:bg-emerald-200 cursor-pointer"
-                        title="Imposta data e protocollo correnti"
+                        className="bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded text-[11px] font-semibold hover:bg-emerald-200 cursor-pointer"
                       >
                         Ora
                       </button>
@@ -506,39 +519,30 @@ export const MatchItem: React.FC<MatchItemProps> = ({
                 </div>
               ) : (
                 <div className="inline-flex items-center gap-1.5 text-xs text-slate-400">
-                  <Clock className="w-3 h-3 text-slate-400" />
-                  <span>Nessun invio PEC registrato per questa gara casalinga.</span>
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span>Richiesta PEC non ancora inviata</span>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Date, Time & Facility */}
-          <div className="md:col-span-5 space-y-1.5 text-xs">
-            <div className="flex flex-wrap items-center gap-2.5 text-slate-700 font-medium">
-              <div className="flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                <span className="font-semibold text-slate-900">{match.data}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-slate-400" />
-                <span className="font-semibold text-slate-900">{match.ora}</span>
-              </div>
-              {priority.isUpcoming && match.status !== 'inviata' && (
-                <span
-                  className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${priority.colorClasses.badge}`}
-                  title="Partita entro 3 giorni: inviare PEC con massima priorità"
-                >
-                  <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
-                  <span>{priority.shortBadge}</span>
-                </span>
-              )}
+          {/* Right: Date, Time & Venue */}
+          <div className="md:col-span-5 md:text-right space-y-1.5 text-xs">
+            <div className="flex flex-wrap md:justify-end items-center gap-3 text-slate-700 tabular-nums">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900">
+                <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>{match.data}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900">
+                <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>{match.ora}</span>
+              </span>
             </div>
 
-            <div className="flex items-start justify-between gap-2 text-slate-600 pt-0.5">
-              <div className="flex items-start gap-1.5 min-w-0 flex-1">
+            <div className="flex items-start md:justify-end gap-2 text-slate-600">
+              <div className="flex items-start gap-1.5 min-w-0">
                 <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                <span className="text-[11px] leading-tight line-clamp-1" title={match.facilityText}>
+                <span className="text-xs leading-snug line-clamp-1 text-left md:text-right" title={match.facilityText}>
                   {match.facilityText}
                 </span>
               </div>
@@ -548,22 +552,24 @@ export const MatchItem: React.FC<MatchItemProps> = ({
                   e.stopPropagation();
                   onChangeFacility();
                 }}
-                className="text-[10px] font-semibold text-amber-800 hover:text-amber-950 bg-amber-50 hover:bg-amber-100 px-1.5 py-0.5 rounded border border-amber-200/80 shrink-0 transition-colors"
+                className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 hover:underline underline-offset-2 shrink-0 cursor-pointer"
                 title="Variazione veloce del campo di gioco"
               >
-                Cambia Campo
+                Cambia
               </button>
             </div>
           </div>
         </div>
 
-        {/* Bottom Actions Bar */}
-        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-          {/* Contact & President Quick Glance */}
-          <div className="flex items-center gap-3 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1">
-              <Phone className="w-3 h-3 text-slate-400" />
-              <span>{club.contactName} ({club.contactPhone})</span>
+        {/* Footer: Contact Info & Primary Actions */}
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
+          {/* Unboxed Contact & President */}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span className="inline-flex items-center gap-1.5 tabular-nums">
+              <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>
+                {club.contactName} ({club.contactPhone})
+              </span>
             </span>
             <span aria-hidden="true" className="text-slate-300">·</span>
             {onChangeClub ? (
@@ -573,84 +579,83 @@ export const MatchItem: React.FC<MatchItemProps> = ({
                   e.stopPropagation();
                   onChangeClub();
                 }}
-                className="flex items-center gap-1 hover:text-indigo-700 hover:underline cursor-pointer"
+                className="inline-flex items-center gap-1 text-slate-600 hover:text-blue-700 hover:underline underline-offset-2 cursor-pointer"
                 title="Clicca per variare società e presidente"
               >
-                <UserCheck className="w-3 h-3 text-slate-400" />
+                <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <span>Pres. {club.president}</span>
               </button>
             ) : (
-              <span className="flex items-center gap-1">
-                <UserCheck className="w-3 h-3 text-slate-400" />
+              <span className="inline-flex items-center gap-1 text-slate-600">
+                <UserCheck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <span>Pres. {club.president}</span>
               </span>
             )}
           </div>
 
-          {/* Action Buttons */}
+          {/* Clean Action Toolbar */}
           <div className="flex flex-wrap items-center gap-1.5">
-            {/* View Full PEC */}
             <button
+              type="button"
               onClick={onViewDetails}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-md bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors"
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Eye className="w-3.5 h-3.5 text-slate-600" />
               <span>Dettagli PEC</span>
             </button>
 
-            {/* OFFICIAL PDF DOWNLOAD (Certificazione di Invio PEC) */}
             <button
+              type="button"
               onClick={handleDownloadPdf}
               title={`Scarica attestazione ufficiale PDF con certificazione di invio alla PEC ${COMMISSARIATO_INFO.pec}`}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-md bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors shadow-2xs"
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-semibold rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <FileCheck2 className="w-3.5 h-3.5 text-red-600" />
-              <span>Scarica PDF Attestazione</span>
+              <FileCheck2 className="w-3.5 h-3.5 text-rose-600" />
+              <span>PDF Attestazione</span>
             </button>
 
-            {/* Quick Copy Subject */}
             <button
-              onClick={e => handleCopy(pec.oggetto, 'subject', e)}
+              type="button"
+              onClick={e => handleCopy(pec.oggetto, 'subject', 'Oggetto PEC', e)}
               title="Copia Oggetto Mail (tutto maiuscolo)"
-              className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1 h-8 px-2.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               {copiedField === 'subject' ? (
                 <Check className="w-3.5 h-3.5 text-emerald-600" />
               ) : (
                 <Copy className="w-3.5 h-3.5 text-slate-400" />
               )}
-              <span>{copiedField === 'subject' ? 'Copiato!' : 'Oggetto'}</span>
+              <span>{copiedField === 'subject' ? 'Copiato' : 'Oggetto'}</span>
             </button>
 
-            {/* Quick Copy Complete Body */}
             <button
-              onClick={e => handleCopy(pec.testoCompleto, 'body', e)}
+              type="button"
+              onClick={e => handleCopy(pec.testoCompleto, 'body', 'Testo PEC', e)}
               title="Copia Testo Completo PEC pronto per invio"
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               {copiedField === 'body' ? (
                 <Check className="w-3.5 h-3.5 text-emerald-600" />
               ) : (
                 <Copy className="w-3.5 h-3.5 text-slate-400" />
               )}
-              <span>{copiedField === 'body' ? 'Copiato!' : 'Copia Testo PEC'}</span>
+              <span>{copiedField === 'body' ? 'Copiato' : 'Copia Testo'}</span>
             </button>
 
-            {/* Download .TXT with Separated Fields */}
             <button
+              type="button"
               onClick={handleDownloadTxt}
-              title="Scarica file di testo con campi separati come richiesto"
-              className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+              title="Scarica file di testo con campi separati"
+              className="inline-flex items-center gap-1 h-8 px-2 text-xs font-medium rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5 text-slate-400" />
               <span>.TXT</span>
             </button>
 
-            {/* Open Mailto */}
             <a
               href={mailtoLink}
               title={`Apri nel client di posta verso ${COMMISSARIATO_INFO.pec}`}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors whitespace-nowrap shrink-0"
             >
               <Mail className="w-3.5 h-3.5" />
               <span>Client PEC</span>
@@ -658,6 +663,6 @@ export const MatchItem: React.FC<MatchItemProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </article>
   );
 };
